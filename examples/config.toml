@@ -33,3 +33,17 @@ protected_paths = [
 #   "~/Documents/MyAgents",
 #   "~/Documents/AgentWorkspaces",
 # ]
+
+# ── Per-category policy overrides ──────────────────────────────────────────
+# Override min_age_days for specific finding categories.
+# Valid category keys: old_installers, stale_runtimes, xcode_archives, android_gradle_cache
+# (and any other category name returned by mac-care scan)
+#
+# [policy.old_installers]
+# min_age_days = 7    # be more aggressive with Downloads installers
+#
+# [policy.stale_runtimes]
+# min_age_days = 180  # flag runtime versions unused for 6+ months (default)
+#
+# [policy.xcode_archives]
+# min_age_days = 60   # keep Xcode archives longer

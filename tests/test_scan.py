@@ -7,11 +7,14 @@ import pytest
 
 from mac_care.config import Config
 from mac_care.scan import (
+    _ai_tool_caches,
     _broken_symlinks,
     _core_dumps_and_crash_logs,
     _ios_backups,
     _login_items,
     _messages_attachments,
+    _orphaned_dotdirs,
+    _stale_runtime_versions,
     _time_machine_snapshots,
 )
 
@@ -186,4 +189,114 @@ def test_login_items_degrade_on_osascript_failure():
         mock_run.return_value.stdout = ""
         mock_run.return_value.returncode = 1
         result = _login_items()
+    assert result == []
+
+
+# ── #31 Stale runtimes ───────────────────────────────────────────────────────
+
+def test_stale_runtimes_flags_old_versions(tmp_path):
+    nvm_versions = tmp_path / ".nvm" / "versions"
+    nvm_versions.mkdir(parents=True)
+    old_ver = nvm_versions / "v16.0.0"
+    old_ver.mkdir()
+    # Set mtime to 400 days ago
+    import os, time
+    old_time = time.time() - (400 * 86400)
+    os.utime(old_ver, (old_time, old_time))
+
+    config = _config(tmp_path)
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.size_of", return_value=100):
+        result = _stale_runtime_versions(config)
+
+    stale = [f for f in result if f.category == "stale_runtimes"]
+    assert len(stale) == 1
+    assert "v16.0.0" in stale[0].reason
+
+
+def test_stale_runtimes_skips_recent_versions(tmp_path):
+    nvm_versions = tmp_path / ".nvm" / "versions"
+    nvm_versions.mkdir(parents=True)
+    (nvm_versions / "v20.0.0").mkdir()
+
+    config = _config(tmp_path)
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.size_of", return_value=100):
+        result = _stale_runtime_versions(config)
+
+    stale = [f for f in result if f.category == "stale_runtimes"]
+    assert stale == []
+
+
+def test_stale_runtimes_flags_duplicate_managers(tmp_path):
+    (tmp_path / ".nvm").mkdir()
+    (tmp_path / ".fnm").mkdir()
+
+    config = _config(tmp_path)
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.size_of", return_value=0):
+        result = _stale_runtime_versions(config)
+
+    dupes = [f for f in result if f.category == "duplicate_version_managers"]
+    assert len(dupes) == 1
+    assert "nvm" in dupes[0].reason and "fnm" in dupes[0].reason
+
+
+def test_per_category_min_age_days(tmp_path):
+    from mac_care.config import Config
+    config = Config(
+        reports_dir=tmp_path / "reports",
+        quarantine_dir=tmp_path / "quarantine",
+        min_age_days=14,
+        category_policy={"stale_runtimes": {"min_age_days": 90}},
+    )
+    assert config.min_age_days_for("stale_runtimes") == 90
+    assert config.min_age_days_for("old_installers") == 14
+
+
+# ── #38 Orphaned dotdirs ─────────────────────────────────────────────────────
+
+def test_orphaned_dotdir_flagged_when_tool_missing(tmp_path):
+    dotdir = tmp_path / ".nvm"
+    dotdir.mkdir()
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.which", return_value=None), \
+         patch("mac_care.scan.size_of", return_value=500):
+        result = _orphaned_dotdirs()
+    nvm_findings = [f for f in result if "nvm" in f.reason]
+    assert len(nvm_findings) == 1
+    assert nvm_findings[0].risk == "review"
+
+
+def test_orphaned_dotdir_skipped_when_tool_present(tmp_path):
+    dotdir = tmp_path / ".nvm"
+    dotdir.mkdir()
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.which", return_value="/usr/local/bin/nvm"):
+        result = _orphaned_dotdirs()
+    nvm_findings = [f for f in result if "nvm" in str(f)]
+    assert nvm_findings == []
+
+
+# ── #39 AI tool caches ───────────────────────────────────────────────────────
+
+def test_ai_tool_caches_returned_when_present(tmp_path):
+    cursor_cache = tmp_path / "Library/Application Support/Cursor/Cache"
+    cursor_cache.mkdir(parents=True)
+    (cursor_cache / "data").write_bytes(b"x" * 1024)
+
+    config = _config(tmp_path)
+    with patch("mac_care.scan.Path.home", return_value=tmp_path), \
+         patch("mac_care.scan.size_of", return_value=1024), \
+         patch("mac_care.scan.top_subdirs_summary", return_value=""), \
+         patch("mac_care.scan.is_protected", return_value=False):
+        result = _ai_tool_caches(config)
+
+    assert any(f.category == "cursor_cache" for f in result)
+
+
+def test_ai_tool_caches_skipped_when_absent(tmp_path):
+    config = _config(tmp_path)
+    with patch("mac_care.scan.Path.home", return_value=tmp_path):
+        result = _ai_tool_caches(config)
     assert result == []

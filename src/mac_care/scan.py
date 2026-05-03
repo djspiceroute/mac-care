@@ -32,6 +32,9 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_core_dumps_and_crash_logs(config))
     findings.extend(_broken_symlinks())
     findings.extend(_login_items())
+    findings.extend(_stale_runtime_versions(config))
+    findings.extend(_orphaned_dotdirs())
+    findings.extend(_ai_tool_caches(config))
     findings.extend(brew_cleanup_findings())
     findings.extend(docker_findings())
     findings.extend(pearcleaner_findings())
@@ -69,15 +72,16 @@ def _downloads_review(config: Config) -> list[Finding]:
     downloads = Path.home() / "Downloads"
     if not downloads.exists():
         return []
+    age_days = config.min_age_days_for("old_installers")
     total = 0
-    cutoff = time.time() - (config.min_age_days * 86400)
+    cutoff = time.time() - (age_days * 86400)
     for child in downloads.iterdir():
         try:
             if child.is_file() and child.suffix.lower() in {".dmg", ".pkg", ".zip", ".tar", ".gz"} and child.stat().st_mtime < cutoff:
                 total += child.stat().st_size
         except OSError:
             continue
-    return [Finding("old_installers", str(downloads), total, "review", f"installers older than {config.min_age_days} days")]
+    return [Finding("old_installers", str(downloads), total, "review", f"installers older than {age_days} days")]
 
 
 def _workspace_review(workspace_path: Path, config: Config) -> list[Finding]:
@@ -239,6 +243,125 @@ def _login_items() -> list[Finding]:
         return []
     reason = f"{len(items)} login item(s): {', '.join(items)}"
     return [Finding("login_items", str(Path.home()), 0, "review", reason)]  # type: ignore[arg-type]
+
+
+def _stale_runtime_versions(config: Config) -> list[Finding]:
+    """Surface old language runtime versions installed via version managers (#31)."""
+    home = Path.home()
+    age_days = config.min_age_days_for("stale_runtimes")
+    cutoff = time.time() - (age_days * 86400)
+    findings: list[Finding] = []
+
+    version_dirs: list[tuple[str, Path]] = [
+        ("nvm", home / ".nvm/versions"),
+        ("fnm", home / ".fnm/node-versions"),
+        ("pyenv", home / ".pyenv/versions"),
+        ("rbenv", home / ".rbenv/versions"),
+        ("rustup", home / ".rustup/toolchains"),
+    ]
+
+    # Detect duplicate managers per language
+    node_managers = [m for m, p in version_dirs[:2] if (home / f".{m}").exists()]
+    py_managers = ["pyenv"] if (home / ".pyenv").exists() else []
+    rb_managers = ["rbenv"] if (home / ".rbenv").exists() else []
+
+    for managers, lang in [(node_managers, "node"), (py_managers, "python"), (rb_managers, "ruby")]:
+        if len(managers) > 1:
+            findings.append(Finding(
+                "duplicate_version_managers",
+                str(home),
+                0,
+                "review",
+                f"{lang}: multiple version managers detected ({', '.join(managers)}) — pick one to avoid PATH conflicts",
+            ))  # type: ignore[arg-type]
+
+    for manager, versions_path in version_dirs:
+        if not versions_path.exists():
+            continue
+        stale: list[str] = []
+        for version_dir in versions_path.iterdir():
+            if not version_dir.is_dir():
+                continue
+            try:
+                mtime = version_dir.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
+                stale.append(version_dir.name)
+        if stale:
+            total = size_of(versions_path)
+            findings.append(Finding(
+                "stale_runtimes",
+                str(versions_path),
+                total,
+                "review",
+                f"{manager}: {len(stale)} version(s) unused for >{age_days} days: {', '.join(sorted(stale)[:5])}",
+            ))  # type: ignore[arg-type]
+
+    return findings
+
+
+# Known CLI tools and the dotdir they leave behind.
+_ORPHAN_DOTDIR_CANDIDATES: list[tuple[str, str]] = [
+    ("nvm", ".nvm"),
+    ("rvm", ".rvm"),
+    ("rbenv", ".rbenv"),
+    ("pyenv", ".pyenv"),
+    ("asdf", ".asdf"),
+    ("fnm", ".fnm"),
+    ("nodenv", ".nodenv"),
+    ("plenv", ".plenv"),
+    ("phpenv", ".phpenv"),
+    ("jenv", ".jenv"),
+    ("sdkman", ".sdkman"),
+    ("pnpm", ".pnpm-store"),
+    ("poetry", ".poetry"),
+    ("pipenv", ".local/share/virtualenvs"),
+]
+
+
+def _orphaned_dotdirs() -> list[Finding]:
+    """Flag dotdirs belonging to CLI tools no longer on PATH (#38)."""
+    home = Path.home()
+    findings: list[Finding] = []
+    for tool, dotdir in _ORPHAN_DOTDIR_CANDIDATES:
+        dir_path = home / dotdir
+        if not dir_path.exists():
+            continue
+        if which(tool) is not None:
+            continue  # tool still active
+        total = size_of(dir_path)
+        findings.append(Finding(
+            "orphan_dotdir",
+            str(dir_path),
+            total,
+            "review",
+            f"{tool} is no longer on PATH but {dotdir} still exists — may be intentional if tool was deactivated",
+        ))  # type: ignore[arg-type]
+    return findings
+
+
+# AI and modern dev tool cache directories (#39).
+_AI_TOOL_CACHES: list[tuple[str, str]] = [
+    ("cursor_cache", "Library/Application Support/Cursor/Cache"),
+    ("cursor_gpu_cache", "Library/Application Support/Cursor/GPUCache"),
+    ("claude_cache", "Library/Application Support/Claude/Cache"),
+    ("claude_gpu_cache", "Library/Application Support/Claude/GPUCache"),
+    ("playwright_cache", "Library/Caches/ms-playwright"),
+    ("codex_runtime_cache", "Library/Caches/codex"),
+]
+
+
+def _ai_tool_caches(config: Config) -> list[Finding]:
+    """Surface AI tool and modern dev cache directories (#39)."""
+    home = Path.home()
+    findings: list[Finding] = []
+    for category, rel_path in _AI_TOOL_CACHES:
+        path = home / rel_path
+        if not path.exists():
+            continue
+        findings.append(_finding(category, path, "auto_safe", f"AI/dev tool cache — safe to clear", config))
+    return findings
 
 
 def _finding(category: str, path: Path, risk: str, reason: str, config: Config) -> Finding:
