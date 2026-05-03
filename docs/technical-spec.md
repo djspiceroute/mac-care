@@ -27,6 +27,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Developer tool health | `mac-care doctor` | Required tools, Homebrew PATH, Docker daemon |
 | Tool status | `mac-care tools status` | Required + optional tools installed/missing |
 | Tool recommendations | `mac-care tools recommend` | Missing OSS tools with `brew install` hints, grouped |
+| Compact scan summary | `mac-care scan` | Counts and sizes by risk, top findings, tool warning count |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Markdown + JSON reports | `mac-care scan` | Timestamped, written to `~/Documents/MacCare/reports/` |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
@@ -125,11 +126,12 @@ Key categories protected by default:
 
 ## Test Coverage
 
-73 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+75 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
 | `tests/test_report.py` | Markdown rendering, risk grouping |
+| `tests/test_summary.py` | Risk totals, top findings, tool warning count |
 | `tests/test_git_safety.py` | `find_git_repos`, `is_dirty`, `has_active_worktrees`, `unsafe_repos` — all degradation paths |
 | `tests/test_doctor.py` | `recommend_tools` — missing/installed/empty/key/brew-prefix |
 | `tests/tools/test_brew.py` | `_parse_size`, full parse, sizes, risk/source tagging, all degradation |
@@ -146,6 +148,22 @@ Key categories protected by default:
 ---
 
 ## Example scan output shape
+
+Reports include a reusable compact summary used by CLI output and intended for future HTML reports and notifications:
+
+```json
+{
+  "summary": {
+    "risks": {
+      "auto_safe": {"count": 12, "size_bytes": 109000000},
+      "review": {"count": 4, "size_bytes": 9800000000},
+      "protected": {"count": 1, "size_bytes": 3200000000}
+    },
+    "top_findings": [],
+    "tool_warning_count": 2
+  }
+}
+```
 
 | Source | Category examples | Risk |
 |---|---|---|

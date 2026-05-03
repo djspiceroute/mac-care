@@ -5,6 +5,7 @@ import json
 
 from .config import Config
 from .model import Finding, ToolStatus, format_bytes
+from .summary import RISK_ORDER, summarize_scan
 
 
 def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatus]) -> tuple[str, str]:
@@ -13,8 +14,10 @@ def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatu
     json_path = config.reports_dir / f"mac-care-{stamp}.json"
     md_path = config.reports_dir / f"mac-care-{stamp}.md"
 
+    summary = summarize_scan(findings, tools)
     payload = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "summary": summary.to_dict(),
         "findings": [finding.__dict__ for finding in findings],
         "tools": [tool.__dict__ for tool in tools],
     }
@@ -24,8 +27,21 @@ def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatu
 
 
 def render_markdown(findings: list[Finding], tools: list[ToolStatus]) -> str:
-    lines = ["# Mac Care Report", ""]
-    for risk in ["auto_safe", "review", "protected"]:
+    summary = summarize_scan(findings, tools)
+    lines = ["# Mac Care Report", "", "## Summary", ""]
+    lines.extend(["| Risk | Count | Size |", "| --- | ---: | ---: |"])
+    for risk in RISK_ORDER:
+        risk_summary = summary.risks[risk]
+        lines.append(f"| {risk} | {risk_summary.count} | {format_bytes(risk_summary.size_bytes)} |")
+    lines.extend(["", f"Tool warnings: {summary.tool_warning_count}", ""])
+
+    if summary.top_findings:
+        lines.extend(["### Top Findings", "", "| Category | Risk | Size | Source |", "| --- | --- | ---: | --- |"])
+        for item in summary.top_findings:
+            lines.append(f"| {item.category} | {item.risk} | {format_bytes(item.size_bytes)} | {item.source} |")
+        lines.append("")
+
+    for risk in RISK_ORDER:
         group = [item for item in findings if item.risk == risk]
         total = sum(item.size_bytes for item in group)
         lines.extend([f"## {risk}", "", f"Total: {format_bytes(total)}", ""])

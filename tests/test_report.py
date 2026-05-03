@@ -12,6 +12,8 @@ class ReportTests(unittest.TestCase):
         )
 
         self.assertIn("# Mac Care Report", output)
+        self.assertIn("## Summary", output)
+        self.assertIn("Tool warnings", output)
         self.assertIn("auto_safe", output)
         self.assertIn("logs", output)
         self.assertIn("git", output)

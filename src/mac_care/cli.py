@@ -8,6 +8,7 @@ from .doctor import check_tools, recommend_tools
 from .model import format_bytes
 from .report import write_reports
 from .scan import scan
+from .summary import summarize_scan
 
 
 def main() -> int:
@@ -52,8 +53,17 @@ def main() -> int:
 
     if args.command == "scan":
         md_path, json_path = write_reports(config, findings, tools)
+        summary = summarize_scan(findings, tools)
         total = sum(item.size_bytes for item in findings)
-        print(f"Scanned {len(findings)} findings, {format_bytes(total)} observed.")
+        review = summary.risks["review"]
+        auto_safe = summary.risks["auto_safe"]
+        protected = summary.risks["protected"]
+        print(
+            "Scanned "
+            f"{len(findings)} findings, {format_bytes(total)} observed "
+            f"({auto_safe.count} auto_safe / {review.count} review / {protected.count} protected; "
+            f"{summary.tool_warning_count} tool warnings)."
+        )
         print(f"Markdown report: {md_path}")
         print(f"JSON report: {json_path}")
         return 0
