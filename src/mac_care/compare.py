@@ -4,7 +4,126 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .model import format_bytes
+from .model import Finding, Report, ToolStatus, format_bytes
+
+
+_SECURITY_CATEGORIES = {"login_items", "diagnostic_reports"}
+
+
+@dataclass
+class FindingDelta:
+    category: str
+    path: str
+    old_bytes: int
+    new_bytes: int
+
+    @property
+    def pct_change(self) -> float:
+        if self.old_bytes == 0:
+            return float("inf")
+        return (self.new_bytes - self.old_bytes) / self.old_bytes
+
+
+@dataclass
+class WhatChangedSummary:
+    new: list[Finding]
+    resolved: list[Finding]
+    grown: list[FindingDelta]
+    shrunk: list[FindingDelta]
+    security_alerts: list[str]
+
+
+def what_changed(prev: Report, curr: Report) -> WhatChangedSummary:
+    prev_by_key: dict[tuple[str, str], Finding] = {(f.category, f.path): f for f in prev.findings}
+    curr_by_key: dict[tuple[str, str], Finding] = {(f.category, f.path): f for f in curr.findings}
+
+    prev_keys = set(prev_by_key)
+    curr_keys = set(curr_by_key)
+
+    new_findings = [curr_by_key[k] for k in sorted(curr_keys - prev_keys)]
+    resolved_findings = [prev_by_key[k] for k in sorted(prev_keys - curr_keys)]
+
+    grown: list[FindingDelta] = []
+    shrunk: list[FindingDelta] = []
+    for key in sorted(prev_keys & curr_keys):
+        old_f = prev_by_key[key]
+        new_f = curr_by_key[key]
+        if new_f.size_bytes > old_f.size_bytes:
+            if old_f.size_bytes == 0 or (new_f.size_bytes - old_f.size_bytes) / old_f.size_bytes > 0.10:
+                grown.append(FindingDelta(old_f.category, old_f.path, old_f.size_bytes, new_f.size_bytes))
+        elif new_f.size_bytes < old_f.size_bytes:
+            shrunk.append(FindingDelta(old_f.category, old_f.path, old_f.size_bytes, new_f.size_bytes))
+
+    security_alerts = [
+        f"New {f.category} detected: {f.reason or f.path}"
+        for f in new_findings
+        if f.category in _SECURITY_CATEGORIES
+    ]
+
+    return WhatChangedSummary(
+        new=new_findings,
+        resolved=resolved_findings,
+        grown=grown,
+        shrunk=shrunk,
+        security_alerts=security_alerts,
+    )
+
+
+def load_report_from_json(path: Path) -> Report:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    findings = [
+        Finding(
+            category=f["category"],
+            path=f["path"],
+            size_bytes=f.get("size_bytes", 0),
+            risk=f.get("risk", "auto_safe"),
+            reason=f.get("reason", ""),
+            source=f.get("source", "native"),
+        )
+        for f in payload.get("findings", [])
+    ]
+    tools = [
+        ToolStatus(name=t["name"], status=t["status"], detail=t["detail"])
+        for t in payload.get("tools", [])
+    ]
+    return Report(findings=findings, tools=tools)
+
+
+def render_what_changed_cli(summary: WhatChangedSummary) -> str:
+    lines = ["What's changed since last scan:"]
+    lines.append(f"  New:      {_fmt_findings(summary.new)}")
+    lines.append(f"  Resolved: {_fmt_findings(summary.resolved)}")
+    lines.append(f"  Grown:    {_fmt_deltas(summary.grown)}")
+    lines.append(f"  Shrunk:   {_fmt_deltas(summary.shrunk)}")
+    for alert in summary.security_alerts:
+        lines.append(f"  [security] {alert}")
+    return "\n".join(lines)
+
+
+def _fmt_findings(items: list[Finding]) -> str:
+    if not items:
+        return "—"
+    by_cat: dict[str, int] = {}
+    for f in items:
+        by_cat[f.category] = by_cat.get(f.category, 0) + 1
+    parts = [f"{cat} ({n})" for cat, n in sorted(by_cat.items())]
+    return f"{len(items)} finding(s): {', '.join(parts)}"
+
+
+def _fmt_deltas(items: list[FindingDelta]) -> str:
+    if not items:
+        return "—"
+    parts = []
+    for d in items[:3]:
+        if d.old_bytes == 0:
+            parts.append(f"{d.category} (new size: {format_bytes(d.new_bytes)})")
+        else:
+            pct = int(abs(d.pct_change) * 100)
+            sign = "+" if d.new_bytes > d.old_bytes else "-"
+            parts.append(f"{d.category} {sign}{pct}% ({format_bytes(d.old_bytes)} → {format_bytes(d.new_bytes)})")
+    if len(items) > 3:
+        parts.append(f"and {len(items) - 3} more")
+    return "; ".join(parts)
 
 
 @dataclass

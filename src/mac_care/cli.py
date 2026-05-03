@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
 from .actions import preview_restore_action, restore_action
 from .clean import safe_clean
-from .compare import compare_reports, render_compare_json, render_compare_markdown
+from .compare import compare_reports, load_report_from_json, render_compare_json, render_compare_markdown, render_what_changed_cli, what_changed
 from .config import Config
 from .explain import explain_category, explain_finding
 from .export import export_obsidian
@@ -14,7 +15,7 @@ from .history import load_history
 from .privacy import TCC_DB, audit_privacy, check_fda, render_privacy_text
 from .uninstall import UninstallResult, app_deletion_hint, discover_support_files, find_app, quarantine_finding, render_uninstall_report
 from .doctor import check_tools, recommend_tools
-from .model import format_bytes
+from .model import Report, format_bytes
 from .notification import notify_scan_complete
 from .report import render_json, render_markdown, write_reports
 from .review import approve_finding
@@ -256,6 +257,18 @@ def main() -> int:
         print(f"Markdown report: {md_path}")
         print(f"JSON report: {json_path}")
         print(f"HTML report: {html_path}")
+
+        try:
+            history = load_history(config.reports_dir)
+            if len(history) >= 2:
+                prev_report = load_report_from_json(history[1].json_path)
+                curr_report = Report(findings=findings, tools=tools)
+                delta = what_changed(prev_report, curr_report)
+                print()
+                print(render_what_changed_cli(delta))
+        except (OSError, KeyError, json.JSONDecodeError, AttributeError):
+            pass
+
         if args.notify:
             notify_scan_complete(summary)
         return 0
