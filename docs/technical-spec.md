@@ -51,7 +51,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 |---|---|---|
 | Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | `mac-care clean --safe --execute` moves to `quarantine_dir`, never `rm` |
 | Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Interactive per-item confirmation for `review` findings |
-| Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Backend safety contract for any UI-triggered cleanup |
+| Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Documented in `docs/dashboard-action-safety.md`; implementation remains future work |
 
 #### Epic: Unified local report viewer ([#2](https://github.com/djspiceroute/mac-care/issues/2))
 
