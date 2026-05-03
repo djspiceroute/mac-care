@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .actions import preview_restore_action, restore_action
 from .clean import safe_clean
 from .compare import compare_reports, render_compare_json, render_compare_markdown
 from .config import Config
@@ -64,6 +65,13 @@ def main() -> int:
     uninstall_parser.add_argument("app_name", help="App name (e.g. Zoom, Slack)")
     uninstall_parser.add_argument("--dry-run", action="store_true", default=True, help="Show what would be quarantined (default)")
     uninstall_parser.add_argument("--execute", action="store_true", help="Quarantine discovered support files")
+
+    quarantine_parser = subparsers.add_parser("quarantine", help="Manage quarantined items")
+    quarantine_subparsers = quarantine_parser.add_subparsers(dest="quarantine_action", required=True)
+    restore_parser = quarantine_subparsers.add_parser("restore", help="Restore a quarantined item by ID or path")
+    restore_parser.add_argument("identifier", help="Finding ID, metadata path, original path, or quarantined item path")
+    restore_parser.add_argument("--dry-run", action="store_true", default=True, help="Preview restore without moving files")
+    restore_parser.add_argument("--execute", action="store_true", help="Move the quarantined item back to its original path")
 
     audit_parser = subparsers.add_parser("audit", help="Security and privacy audits")
     audit_subparsers = audit_parser.add_subparsers(dest="audit_action", required=True)
@@ -134,6 +142,18 @@ def main() -> int:
         elif not args.execute and support_files:
             print("\nDry run only. Run with --execute to quarantine support files.")
         return 0
+
+    if args.command == "quarantine":
+        if args.quarantine_action == "restore":
+            result = (
+                restore_action(config, args.identifier)
+                if args.execute
+                else preview_restore_action(config, args.identifier)
+            )
+            print(result.render())
+            if not args.execute:
+                print("Dry run only. No files were moved.")
+            return 0
 
     if args.command == "audit" and args.audit_action == "privacy":
         if not check_fda():

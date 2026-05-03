@@ -29,15 +29,15 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 ### 🟡 Phase 2: Interactive Console (In Progress)
 
-| Feature | Issue | Status |
-|---|---|---|
+| Feature | Notes | Issue | Status |
+|---|---|---|---|
 | **Quarantine Management** | status, purge, and auto-rotation | #44, #45 | Planned |
 | **Security Audit** | Persistence visibility for LaunchAgents/Daemons | #54 | Planned |
 | **Xcode Dev Cleanup** | Simulator and device support cleanup | #53 | Planned |
 | **Large File Finder** | Global scanner with protected-path exclusions | #51 | Planned |
 | **Interactive TUI** | Terminal-based management console | #64 | Planned |
-| **Action Service Layer** | Reusable engine for CLI and TUI | #61 | Planned |
-| **Quarantine Restore** | Receipt-based "Undo" for cleanup | #62 | Planned |
+| **Action Service Layer** | Reusable engine for CLI and TUI | #61 | Shipped |
+| **Quarantine Restore** | Metadata-backed "Undo" for cleanup | #62 | Shipped |
 | **Hardening** | 0700 permissions and path anonymization | #59, #60 | Planned |
 | **Supply Chain** | Record absolute tool paths in reports | #50 | Planned |
 
@@ -49,7 +49,7 @@ These principles guide all development:
 
 1. **Local-Only**: No data is uploaded; all processing is on-device.
 2. **Reversibility**: Files are moved to quarantine with **0700 permissions** (#59).
-3. **Receipt-Based Audit**: Every action generates a JSON receipt for the **Restore** flow.
+3. **Restore Metadata**: Quarantine metadata is used to identify and restore items; durable action receipts remain a follow-up.
 4. **Supply Chain Transparency**: Resolved binary paths are pinned and recorded in reports (#50).
 5. **Guided Sudo**: Privilege escalation is never automated; mac-care provides verified commands for manual execution.
 6. **Path Anonymization**: Reports can redact home directory paths for safe sharing (#60).

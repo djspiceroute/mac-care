@@ -100,6 +100,44 @@ def test_review_approve_dry_run(monkeypatch, capsys):
     assert "Dry run only" in output
 
 
+def test_quarantine_restore_dry_run(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(cli.Config, "load", lambda _: "config")
+    monkeypatch.setattr(
+        cli,
+        "preview_restore_action",
+        lambda config, identifier: calls.append((config, identifier))
+        or type("Result", (), {"render": lambda self: "would restore quarantine/item -> original/item"})(),
+    )
+    monkeypatch.setattr("sys.argv", ["mac-care", "quarantine", "restore", "abc"])
+
+    assert cli.main() == 0
+
+    output = capsys.readouterr().out
+    assert calls == [("config", "abc")]
+    assert "would restore quarantine/item -> original/item" in output
+    assert "Dry run only. No files were moved." in output
+
+
+def test_quarantine_restore_execute(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(cli.Config, "load", lambda _: "config")
+    monkeypatch.setattr(
+        cli,
+        "restore_action",
+        lambda config, identifier: calls.append((config, identifier))
+        or type("Result", (), {"render": lambda self: "restored quarantine/item -> original/item"})(),
+    )
+    monkeypatch.setattr("sys.argv", ["mac-care", "quarantine", "restore", "abc", "--execute"])
+
+    assert cli.main() == 0
+
+    output = capsys.readouterr().out
+    assert calls == [("config", "abc")]
+    assert "restored quarantine/item -> original/item" in output
+    assert "Dry run only" not in output
+
+
 def test_clean_purge_abort(monkeypatch, capsys):
     monkeypatch.setattr(cli.Config, "load", lambda _: object())
     monkeypatch.setattr(cli, "scan", lambda _: [Finding("logs", "/tmp/logs", 100, "auto_safe", "old logs")])
