@@ -63,7 +63,7 @@ def test_ssh_key_unencrypted_flagged(tmp_path):
     ssh_dir = tmp_path / ".ssh"
     ssh_dir.mkdir()
     key = ssh_dir / "id_ed25519"
-    key.write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\nnotencrypted\n-----END OPENSSH PRIVATE KEY-----\n")
+    key.write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ==\n-----END OPENSSH PRIVATE KEY-----\n")
     with patch("mac_care.doctor.Path.home", return_value=tmp_path):
         result = check_ssh_keys()
     assert len(result) == 1
@@ -75,7 +75,7 @@ def test_ssh_key_encrypted_ok(tmp_path):
     ssh_dir = tmp_path / ".ssh"
     ssh_dir.mkdir()
     key = ssh_dir / "id_ed25519"
-    key.write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\nbcrypt\n-----END OPENSSH PRIVATE KEY-----\n")
+    key.write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0\n-----END OPENSSH PRIVATE KEY-----\n")
     with patch("mac_care.doctor.Path.home", return_value=tmp_path):
         result = check_ssh_keys()
     assert len(result) == 1

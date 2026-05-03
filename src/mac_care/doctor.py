@@ -172,8 +172,23 @@ def check_ssh_keys() -> list[ToolStatus]:
             continue
         if b"PRIVATE KEY" not in header and b"PuTTY-User-Key" not in header:
             continue
-        # Encrypted OpenSSH keys contain "bcrypt" KDF header; legacy PEM keys contain "ENCRYPTED"
-        encrypted = b"bcrypt" in header or b"ENCRYPTED" in header or b"Proc-Type: 4,ENCRYPTED" in header
+        # OpenSSH format: cipher name follows magic bytes; "none" means no passphrase
+        # Legacy PEM format: "ENCRYPTED" appears in the header line
+        if header.startswith(b"-----BEGIN OPENSSH"):
+            import base64
+            try:
+                lines = header.split(b"\n")
+                b64 = b"".join(l for l in lines if l and not l.startswith(b"-----"))
+                # trim to valid base64 length (multiple of 4) before decoding
+                b64 = b64[:len(b64) - len(b64) % 4]
+                raw = base64.b64decode(b64)
+                # openssh-key-v1\0 = 16 bytes; then 4-byte length-prefixed cipher name
+                # unencrypted keys have cipher "none" (\x00\x00\x00\x04none)
+                encrypted = b"\x00\x00\x00\x04none" not in raw[15:24]
+            except Exception:
+                encrypted = False
+        else:
+            encrypted = b"ENCRYPTED" in header or b"Proc-Type: 4,ENCRYPTED" in header
         if encrypted:
             statuses.append(ToolStatus(
                 name=f"ssh_key:{key_file.name}",
