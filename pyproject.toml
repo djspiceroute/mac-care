@@ -9,6 +9,7 @@ description = "Local macOS maintenance CLI for safe cleanup reports and develope
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Deepankar Joshi" }]
+license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]

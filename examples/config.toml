@@ -1,20 +1,25 @@
+# mac-care configuration
+# Copy to ~/.config/mac-care/config.toml and edit to suit your machine.
+# All settings are optional — defaults work out of the box.
+
 [policy]
+# Where timestamped Markdown + JSON reports are written.
 reports_dir = "~/Documents/MacCare/reports"
+
+# Where files are moved when mac-care clean --execute is run (never rm).
 quarantine_dir = "~/Documents/MacCare/quarantine"
+
+# Old installers (.dmg / .pkg / .zip) in ~/Downloads older than this are surfaced as review findings.
 min_age_days = 14
 
+# Paths that are never auto-cleaned, regardless of risk level.
+# Add any directory you want mac-care to always skip.
+# In addition to this list, any directory containing an active or dirty git repo
+# is automatically protected at runtime.
 protected_paths = [
-  "~/.codex",
-  "~/.agents",
-  "~/multica",
-  "~/multica_workspaces",
+  "~/.ssh",
   "~/.vscode/extensions",
   "~/Library/Application Support/Google/Chrome/NativeMessagingHosts",
   "~/Library/Application Support/Mozilla/NativeMessagingHosts",
+  # "~/Projects/active-client",   # example: protect a specific project directory
 ]
-
-[tools]
-prefer_open_source = true
-disk_usage = ["gdu", "ncdu", "dust", "dua"]
-security = ["KnockKnock", "BlockBlock", "LuLu"]
-cleanup_candidates = ["mole", "cleardisk", "pearcleaner"]

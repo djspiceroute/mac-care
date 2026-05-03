@@ -2,7 +2,7 @@
 
 ## Project Goal
 
-Build a free, local macOS maintenance tool for Deepankar's developer machine.
+Build a free, local macOS maintenance CLI for developer machines.
 
 This project replaces the useful operational parts of CleanMyMac without copying its UI or building risky one-click cleanup behaviour.
 
@@ -28,13 +28,10 @@ Use this priority order when instructions conflict:
 
 Do not auto-delete these unless the user explicitly changes config:
 
-- `~/.codex`
-- `~/.agents`
-- `~/multica`
-- `~/multica_workspaces`
 - `~/.vscode/extensions`
-- browser extensions and native messaging hosts
-- dirty git repositories or worktrees
+- `~/.ssh`
+- Browser native messaging hosts (Chrome, Firefox)
+- Dirty or active git repositories or worktrees
 
 ## Architecture
 
@@ -59,7 +56,7 @@ Preferred tools:
 - `dua` (primary) / `dust` / `gdu` / `ncdu` for disk usage trees
 - `brew cleanup --dry-run` for Homebrew cache analysis
 - `docker system df` for container/image/volume waste
-- `pearcleaner --list-orphans` for orphaned app support files
+- `pearcleaner list-orphaned` for orphaned app support files
 - Objective-See tools (KnockKnock) for security/persistence visibility — future
 
 Each wrapper in `tools/` must:
@@ -124,8 +121,10 @@ Types: `feat`, `fix`, `test`, `chore`, `docs`, `refactor`
 ## Testing Rules
 
 - Every new module gets at least one unit test
+- Every new `tools/` module must have at least one degradation test (tool missing, timeout, OSError)
 - Tests never touch the real filesystem — use `tmp_path` (pytest) or `tempfile`
 - Tests never call real external tools — mock all `subprocess` calls
+- Mock target is always the module's own import (e.g. `mac_care.doctor.which`, not `shutil.which`)
 - Tests must run in under 5 seconds total
 - Clearly state when tests could not run and why
 
