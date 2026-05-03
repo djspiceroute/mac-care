@@ -45,3 +45,27 @@ def test_scan_default_writes_reports(monkeypatch, capsys):
     assert "Scanned 1 findings" in output
     assert "Markdown report: /tmp/report.md" in output
     assert "HTML report: /tmp/latest.html" in output
+
+
+def test_schedule_install_dry_run(monkeypatch, capsys):
+    monkeypatch.setattr(cli.Config, "load", lambda _: object())
+    monkeypatch.setattr(cli, "install_schedule", lambda *_args, **_kwargs: type("Result", (), {"message": "<plist/>"})())
+    monkeypatch.setattr("sys.argv", ["mac-care", "schedule", "install", "--dry-run"])
+
+    assert cli.main() == 0
+
+    assert "<plist/>" in capsys.readouterr().out
+
+
+def test_schedule_uninstall_dry_run(monkeypatch, capsys):
+    monkeypatch.setattr(cli.Config, "load", lambda _: object())
+    monkeypatch.setattr(
+        cli,
+        "uninstall_schedule",
+        lambda **_kwargs: type("Result", (), {"message": "Would unload and remove plist"})(),
+    )
+    monkeypatch.setattr("sys.argv", ["mac-care", "schedule", "uninstall", "--dry-run"])
+
+    assert cli.main() == 0
+
+    assert "Would unload" in capsys.readouterr().out

@@ -8,6 +8,7 @@ from .doctor import check_tools, recommend_tools
 from .model import format_bytes
 from .report import render_json, render_markdown, write_reports
 from .scan import scan
+from .scheduler import install_schedule, uninstall_schedule
 from .summary import summarize_scan
 
 
@@ -39,6 +40,14 @@ def main() -> int:
     clean_parser.add_argument("--safe", action="store_true", help="Only consider auto_safe findings")
     clean_parser.add_argument("--dry-run", action="store_true", default=True, help="Do not delete anything")
 
+    schedule_parser = subparsers.add_parser("schedule", help="Manage periodic launchd scans")
+    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
+    install_parser = schedule_subparsers.add_parser("install", help="Install periodic scan launchd plist")
+    install_parser.add_argument("--interval", type=int, default=24, help="Scan interval in hours")
+    install_parser.add_argument("--dry-run", action="store_true", default=False, help="Print plist without writing files")
+    uninstall_parser = schedule_subparsers.add_parser("uninstall", help="Uninstall periodic scan launchd plist")
+    uninstall_parser.add_argument("--dry-run", action="store_true", default=False, help="Print planned removal without changing files")
+
     args = parser.parse_args()
     config = Config.load(args.config)
 
@@ -54,6 +63,16 @@ def main() -> int:
         for status in check_tools(include_optional=True):
             print(f"{status.name}: {status.status} - {status.detail}")
         return 0
+
+    if args.command == "schedule":
+        if args.schedule_action == "install":
+            result = install_schedule(config, interval_hours=args.interval, dry_run=args.dry_run)
+            print(result.message)
+            return 0
+        if args.schedule_action == "uninstall":
+            result = uninstall_schedule(dry_run=args.dry_run)
+            print(result.message)
+            return 0
 
     findings = scan(config)
     tools = check_tools()
