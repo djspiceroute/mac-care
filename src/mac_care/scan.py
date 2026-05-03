@@ -15,8 +15,90 @@ from .tools.docker_check import docker_findings
 from .tools.pearcleaner import pearcleaner_findings
 from .tools.xcode import xcode_findings
 
-# Directories larger than this get a top-subdirs breakdown appended to reason.
+# Default directories larger than this get a top-subdirs breakdown appended to reason.
 _BREAKDOWN_THRESHOLD_BYTES = 500 * 1024 * 1024  # 500 MB
+
+# Threshold for individual-file large-file findings.
+_LARGE_FILE_THRESHOLD_BYTES = 1024 * 1024 * 1024  # 1 GB
+
+
+def _large_files(config: Config) -> list[Finding]:
+    """Find individual files >= 1 GB under common user directories.
+
+    Files inside protected paths, quarantine, or dirty/active git repos are skipped.
+    All findings are ``review`` risk — never auto-deleted.
+    """
+    threshold = _LARGE_FILE_THRESHOLD_BYTES
+    home = Path.home()
+    now = time.time()
+    roots = [
+        home / "Downloads",
+        home / "Desktop",
+        home / "Documents",
+    ]
+
+    findings: list[Finding] = []
+    for root in roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        if is_protected(root, config):
+            continue
+
+        bad_repos: set[str] = set()
+        try:
+            for repo in unsafe_repos(root):
+                bad_repos.add(str(repo.resolve()))
+        except (OSError, PermissionError):
+            pass
+
+        for child in root.rglob("*"):
+            if not child.is_file() or child.is_symlink():
+                continue
+
+            if is_protected(child, config):
+                continue
+
+            if _under_any_repo(child, bad_repos):
+                continue
+
+            try:
+                size = path_size(child)
+            except (OSError, PermissionError):
+                continue
+            if size < threshold:
+                continue
+
+            mtime = child.stat().st_mtime
+            age_days = int((now - mtime) / 86400)
+            reason = (
+                f"large file ({size / (1024 ** 3):.1f} GB) — "
+                f"age {age_days} days; manual review required"
+            )
+            findings.append(
+                Finding("large_files", str(child), size, "review", reason)
+            )
+
+    return findings
+
+
+def _under_any_repo(path: Path, repos: set[str]) -> bool:
+    """Return True if *path* is inside any of the given repo directories."""
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for repo_str in repos:
+        try:
+            repo = Path(repo_str).resolve()
+        except OSError:
+            continue
+        try:
+            if resolved == repo or repo in resolved.parents:
+                return True
+        except (ValueError, OSError):
+            continue
+    return False
+
 
 
 def scan(config: Config) -> list[Finding]:
@@ -36,6 +118,7 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_stale_runtime_versions(config))
     findings.extend(_orphaned_dotdirs())
     findings.extend(_ai_tool_caches(config))
+    findings.extend(_large_files(config))
     findings.extend(brew_cleanup_findings())
     findings.extend(docker_findings())
     findings.extend(pearcleaner_findings())
