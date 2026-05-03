@@ -4,6 +4,7 @@ from pathlib import Path
 import time
 
 from .config import Config
+from .git_safety import unsafe_repos
 from .model import Finding, path_size
 
 
@@ -61,7 +62,18 @@ def _codex_workspace_review(config: Config) -> list[Finding]:
     codex_docs = Path.home() / "Documents/Codex"
     if not codex_docs.exists():
         return []
-    return [Finding("codex_workspaces", str(codex_docs), path_size(codex_docs), "review", "old agent workspaces can be large; active work must be checked before deletion")]
+
+    dirty = unsafe_repos(codex_docs)
+    if dirty:
+        repo_list = ", ".join(str(r) for r in dirty[:3])
+        suffix = f" and {len(dirty) - 3} more" if len(dirty) > 3 else ""
+        reason = f"active/dirty git repos detected — cannot auto-clean: {repo_list}{suffix}"
+        risk: str = "protected"
+    else:
+        reason = "old agent workspaces can be large; active work must be checked before deletion"
+        risk = "review"
+
+    return [Finding("codex_workspaces", str(codex_docs), path_size(codex_docs), risk, reason)]  # type: ignore[arg-type]
 
 
 def _finding(category: str, path: Path, risk: str, reason: str, config: Config) -> Finding:
