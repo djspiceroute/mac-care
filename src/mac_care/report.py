@@ -5,6 +5,7 @@ from html import escape
 import json
 
 from .config import Config
+from .history import write_history_index
 from .model import Finding, ToolStatus, format_bytes
 from .summary import RISK_ORDER, summarize_scan
 
@@ -33,6 +34,7 @@ def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatu
     json_path.write_text(render_json(findings, tools), encoding="utf-8")
     md_path.write_text(render_markdown(findings, tools), encoding="utf-8")
     html_path.write_text(render_html(findings, tools), encoding="utf-8")
+    write_history_index(config.reports_dir)
     return str(md_path), str(json_path), str(html_path)
 
 

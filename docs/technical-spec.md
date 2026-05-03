@@ -35,6 +35,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | macOS scan notification | `mac-care scan --notify` | Posts compact scan summary through `osascript`; degrades gracefully |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
+| Report history index | `mac-care scan` | Writes read-only `index.html` listing previous JSON/Markdown/dashboard reports |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
 | GitHub Actions CI | `.github/workflows/test.yml` | `macos-latest`, Python 3.11, 73 tests |
 | Branch protection | GitHub | Requires CI to pass before merge to main |
@@ -58,7 +59,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 |---|---|---|
 | Compact scan summary model | [#8](https://github.com/djspiceroute/mac-care/issues/8) | Lightweight summary struct for dashboard and notifications |
 | HTML dashboard from scan results | [#9](https://github.com/djspiceroute/mac-care/issues/9) | Static HTML report generated alongside Markdown + JSON |
-| Report history index | [#10](https://github.com/djspiceroute/mac-care/issues/10) | Track consecutive scans; surface what grew since last run |
+| Report history index | [#10](https://github.com/djspiceroute/mac-care/issues/10) | Implemented as read-only `index.html`; trend deltas remain future work |
 | Stdout and format flags | [#6](https://github.com/djspiceroute/mac-care/issues/6) | `mac-care scan --stdout --format json/markdown` for piping |
 
 #### Epic: Periodic local scan workflow ([#3](https://github.com/djspiceroute/mac-care/issues/3))
@@ -131,11 +132,12 @@ Key categories protected by default:
 
 ## Test Coverage
 
-91 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+95 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
 | `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
+| `tests/test_history.py` | Report history loading, malformed report skipping, index rendering/writing |
 | `tests/test_notification.py` | Notification text and graceful `osascript` delivery behavior |
 | `tests/test_scheduler.py` | launchd plist rendering, dry-run install/uninstall, plist write/remove using temp paths |
 | `tests/test_report.py` | Markdown/JSON/HTML rendering, risk grouping, read-only dashboard guard |
@@ -192,6 +194,8 @@ mac-care schedule uninstall
 ```
 
 Scheduled scans use `mac-care scan --notify`, which writes reports and posts a compact macOS notification. Notification delivery failures are ignored so scan/report generation still succeeds.
+
+Each default scan also updates `index.html` in the reports directory. The index is read-only and lists historical JSON/Markdown/dashboard reports in reverse chronological order, skipping malformed JSON reports safely.
 
 | Source | Category examples | Risk |
 |---|---|---|
