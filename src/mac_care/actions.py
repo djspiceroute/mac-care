@@ -9,6 +9,7 @@ import uuid
 
 from .config import Config
 from .git_safety import unsafe_repos
+from .ids import finding_id
 from .model import Finding
 from .safety import is_protected
 
@@ -34,8 +35,12 @@ class ActionResult:
     def render(self) -> str:
         if self.status == "would_clean":
             return f"would clean {self.category}: {self.path}"
+        if self.status == "would_restore" and self.destination:
+            return f"would restore {self.path} -> {self.destination}"
         if self.status == "quarantined" and self.destination:
             return f"quarantined {self.category}: {self.path} -> {self.destination}"
+        if self.status == "restored" and self.destination:
+            return f"restored {self.path} -> {self.destination}"
         if self.status == "purged":
             return f"purged {self.category}: {self.path}"
         return self.message
@@ -179,6 +184,14 @@ def purge_action(finding: Finding, config: Config | None = None) -> ActionResult
     )
 
 
+def preview_restore_action(config: Config, identifier: str) -> ActionResult:
+    return _restore_quarantine_item(config, identifier, dry_run=True)
+
+
+def restore_action(config: Config, identifier: str) -> ActionResult:
+    return _restore_quarantine_item(config, identifier, dry_run=False)
+
+
 def _safety_skip(finding: Finding, config: Config | None) -> ActionResult | None:
     path = Path(finding.path).expanduser()
 
@@ -208,6 +221,162 @@ def _safety_skip(finding: Finding, config: Config | None) -> ActionResult | None
         )
 
     return None
+
+
+def _restore_quarantine_item(config: Config, identifier: str, dry_run: bool) -> ActionResult:
+    metadata_path = _find_restore_metadata(config, identifier)
+    if metadata_path is None:
+        return ActionResult(
+            action="restore",
+            category="quarantine",
+            path=identifier,
+            status="skipped",
+            message=f"skipped restore: no quarantine metadata found for {identifier}",
+        )
+
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ActionResult(
+            action="restore",
+            category="quarantine",
+            path=str(metadata_path),
+            status="skipped",
+            message=f"skipped restore: metadata is unreadable {metadata_path}",
+        )
+
+    original_path = Path(str(metadata.get("original_path") or "")).expanduser()
+    quarantine_path = Path(str(metadata.get("quarantine_path") or "")).expanduser()
+    category = str(metadata.get("category") or "quarantine")
+    size_bytes = int(metadata.get("size_bytes") or 0)
+
+    if not _is_under(config.quarantine_dir.expanduser(), metadata_path):
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(metadata_path),
+            status="skipped",
+            message=f"skipped restore: metadata is outside quarantine {metadata_path}",
+            size_bytes=size_bytes,
+        )
+
+    if not _is_under(config.quarantine_dir.expanduser(), quarantine_path):
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(quarantine_path),
+            status="skipped",
+            message=f"skipped restore: quarantined item is outside quarantine {quarantine_path}",
+            size_bytes=size_bytes,
+        )
+
+    if not quarantine_path.exists():
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(quarantine_path),
+            status="skipped",
+            message=f"skipped restore: quarantined item no longer exists {quarantine_path}",
+            destination=str(original_path),
+            size_bytes=size_bytes,
+        )
+
+    if original_path.exists():
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(quarantine_path),
+            status="skipped",
+            message=f"skipped restore: destination already exists {original_path}",
+            destination=str(original_path),
+            size_bytes=size_bytes,
+        )
+
+    if not original_path.parent.exists():
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(quarantine_path),
+            status="skipped",
+            message=f"skipped restore: destination parent does not exist {original_path.parent}",
+            destination=str(original_path),
+            size_bytes=size_bytes,
+        )
+
+    if dry_run:
+        return ActionResult(
+            action="restore",
+            category=category,
+            path=str(quarantine_path),
+            status="would_restore",
+            message=f"would restore {quarantine_path} -> {original_path}",
+            destination=str(original_path),
+            size_bytes=size_bytes,
+        )
+
+    shutil.move(str(quarantine_path), str(original_path))
+    return ActionResult(
+        action="restore",
+        category=category,
+        path=str(quarantine_path),
+        status="restored",
+        message=f"restored {quarantine_path} -> {original_path}",
+        destination=str(original_path),
+        size_bytes=size_bytes,
+    )
+
+
+def _find_restore_metadata(config: Config, identifier: str) -> Path | None:
+    quarantine_dir = config.quarantine_dir.expanduser()
+    candidate = Path(identifier).expanduser()
+
+    if candidate.exists():
+        if candidate.is_file() and candidate.name.endswith(".metadata.json") and _is_under(quarantine_dir, candidate):
+            return candidate
+        metadata = candidate.parent / f"{candidate.name}.metadata.json"
+        if metadata.exists() and _is_under(quarantine_dir, metadata):
+            return metadata
+
+    for metadata_path in quarantine_dir.rglob("*.metadata.json"):
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        finding = _finding_from_metadata(metadata)
+        if finding and finding_id(finding) == identifier:
+            return metadata_path
+        if str(metadata.get("original_path") or "") == identifier:
+            return metadata_path
+        if str(metadata.get("quarantine_path") or "") == identifier:
+            return metadata_path
+    return None
+
+
+def _finding_from_metadata(metadata: dict) -> Finding | None:
+    required = ["category", "original_path", "size_bytes", "risk", "reason"]
+    if any(key not in metadata for key in required):
+        return None
+    risk = str(metadata["risk"])
+    if risk not in {"auto_safe", "review", "protected"}:
+        return None
+    return Finding(
+        category=str(metadata["category"]),
+        path=str(metadata["original_path"]),
+        size_bytes=int(metadata.get("size_bytes") or 0),
+        risk=risk,  # type: ignore[arg-type]
+        reason=str(metadata["reason"]),
+        source=str(metadata.get("source") or "native"),
+    )
+
+
+def _is_under(root: Path, path: Path) -> bool:
+    try:
+        resolved_root = root.resolve()
+        resolved_path = path.resolve()
+    except OSError:
+        resolved_root = root
+        resolved_path = path
+    return resolved_path == resolved_root or resolved_root in resolved_path.parents
 
 
 def _quarantine_path(config: Config, finding: Finding, run_id: str) -> Path:
