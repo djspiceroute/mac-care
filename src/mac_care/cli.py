@@ -4,7 +4,7 @@ import argparse
 
 from .clean import safe_clean
 from .config import Config
-from .doctor import check_tools
+from .doctor import check_tools, recommend_tools
 from .model import format_bytes
 from .report import write_reports
 from .scan import scan
@@ -17,7 +17,15 @@ def main() -> int:
 
     subparsers.add_parser("scan", help="Scan cleanup opportunities and write reports")
     subparsers.add_parser("doctor", help="Check developer tool health")
-    subparsers.add_parser("tools", help="Show required and optional tool status")
+
+    tools_parser = subparsers.add_parser("tools", help="OSS tool status and recommendations")
+    tools_parser.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=["status", "recommend"],
+        help="status: show installed/missing tools (default). recommend: show install hints for missing tools.",
+    )
 
     clean_parser = subparsers.add_parser("clean", help="Run safe cleanup policy")
     clean_parser.add_argument("--safe", action="store_true", help="Only consider auto_safe findings")
@@ -32,6 +40,9 @@ def main() -> int:
         return 0
 
     if args.command == "tools":
+        if args.action == "recommend":
+            return _tools_recommend()
+        # default: status
         for status in check_tools(include_optional=True):
             print(f"{status.name}: {status.status} - {status.detail}")
         return 0
@@ -57,6 +68,27 @@ def main() -> int:
 
     parser.error("unknown command")
     return 2
+
+
+def _tools_recommend() -> int:
+    recs = recommend_tools()
+    if not recs:
+        print("All recommended OSS tools are already installed.")
+        return 0
+
+    # Group by function
+    groups: dict[str, list[dict]] = {}
+    for rec in recs:
+        groups.setdefault(rec["group"], []).append(rec)
+
+    print("Recommended OSS tools to install:\n")
+    for group, items in groups.items():
+        print(f"  {group}:")
+        for item in items:
+            print(f"    {item['name']:<14}  {item['desc']}")
+            print(f"    {'':14}  → {item['install']}")
+        print()
+    return 0
 
 
 if __name__ == "__main__":

@@ -29,7 +29,56 @@ OSS_OPTIONAL_TOOLS = [
     "mole",
     "cleardisk",
     "mas",
+    "pearcleaner",
 ]
+
+# Grouped recommendations shown by `mac-care tools recommend`.
+# Keys match entries in OSS_OPTIONAL_TOOLS where relevant.
+TOOL_RECOMMENDATIONS: dict[str, dict[str, str]] = {
+    # --- Disk analysis ---
+    "dua": {
+        "group": "Disk analysis",
+        "desc": "Fast parallel disk usage tree — primary backend for mac-care scan",
+        "install": "brew install dua-cli",
+    },
+    "dust": {
+        "group": "Disk analysis",
+        "desc": "Rust-based directory size tree, great for quick terminal overviews",
+        "install": "brew install dust",
+    },
+    "gdu": {
+        "group": "Disk analysis",
+        "desc": "Interactive Go disk usage browser (ncdu alternative)",
+        "install": "brew install gdu",
+    },
+    "ncdu": {
+        "group": "Disk analysis",
+        "desc": "Classic ncurses disk usage browser",
+        "install": "brew install ncdu",
+    },
+    # --- Package / app management ---
+    "mas": {
+        "group": "Package management",
+        "desc": "Mac App Store CLI — check for app updates from the terminal",
+        "install": "brew install mas",
+    },
+    "pearcleaner": {
+        "group": "App cleanup",
+        "desc": "Finds orphaned app support files left behind after app deletion",
+        "install": "brew install --cask pearcleaner",
+    },
+    # --- Network / SSH ---
+    "mole": {
+        "group": "Network",
+        "desc": "SSH tunnel manager — not used by mac-care scan but useful on a dev machine",
+        "install": "brew install mole",
+    },
+}
+
+
+@staticmethod
+def _tool_installed(name: str) -> bool:
+    return which(name) is not None
 
 
 def check_tools(include_optional: bool = True) -> list[ToolStatus]:
@@ -52,6 +101,19 @@ def check_tools(include_optional: bool = True) -> list[ToolStatus]:
             statuses.append(ToolStatus(name=name, status="available" if found else "optional_missing", detail=found or "optional integration not installed"))
 
     return statuses
+
+
+def recommend_tools() -> list[dict[str, str]]:
+    """Return recommendations for missing optional OSS tools, grouped by function.
+
+    Each entry is a dict with keys: name, group, desc, install, status.
+    Only tools that are NOT already installed are included.
+    """
+    missing = []
+    for name, info in TOOL_RECOMMENDATIONS.items():
+        if not which(name):
+            missing.append({"name": name, **info, "status": "not installed"})
+    return missing
 
 
 def _docker_status() -> ToolStatus:
