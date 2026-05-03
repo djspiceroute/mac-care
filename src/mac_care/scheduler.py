@@ -23,8 +23,8 @@ class ScheduleResult:
 def default_program_arguments() -> list[str]:
     executable = shutil.which("mac-care")
     if executable:
-        return [executable, "scan"]
-    return [sys.executable, "-m", "mac_care.cli", "scan"]
+        return [executable, "scan", "--notify"]
+    return [sys.executable, "-m", "mac_care.cli", "scan", "--notify"]
 
 
 def build_plist(config: Config, interval_hours: int = 24, program_arguments: list[str] | None = None) -> dict:

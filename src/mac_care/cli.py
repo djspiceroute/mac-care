@@ -6,6 +6,7 @@ from .clean import safe_clean
 from .config import Config
 from .doctor import check_tools, recommend_tools
 from .model import format_bytes
+from .notification import notify_scan_complete
 from .report import render_json, render_markdown, write_reports
 from .scan import scan
 from .scheduler import install_schedule, uninstall_schedule
@@ -19,6 +20,7 @@ def main() -> int:
 
     scan_parser = subparsers.add_parser("scan", help="Scan cleanup opportunities and write reports")
     scan_parser.add_argument("--stdout", action="store_true", help="Print report to stdout instead of writing files")
+    scan_parser.add_argument("--notify", action="store_true", help="Post a macOS notification after scan completes")
     scan_parser.add_argument(
         "--format",
         choices=["json", "markdown"],
@@ -78,15 +80,17 @@ def main() -> int:
     tools = check_tools()
 
     if args.command == "scan":
+        summary = summarize_scan(findings, tools)
         if args.stdout:
             if args.format == "json":
                 print(render_json(findings, tools))
             else:
                 print(render_markdown(findings, tools))
+            if args.notify:
+                notify_scan_complete(summary)
             return 0
 
         md_path, json_path, html_path = write_reports(config, findings, tools)
-        summary = summarize_scan(findings, tools)
         total = sum(item.size_bytes for item in findings)
         review = summary.risks["review"]
         auto_safe = summary.risks["auto_safe"]
@@ -100,6 +104,8 @@ def main() -> int:
         print(f"Markdown report: {md_path}")
         print(f"JSON report: {json_path}")
         print(f"HTML report: {html_path}")
+        if args.notify:
+            notify_scan_complete(summary)
         return 0
 
     if args.command == "clean":

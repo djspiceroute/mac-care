@@ -47,6 +47,20 @@ def test_scan_default_writes_reports(monkeypatch, capsys):
     assert "HTML report: /tmp/latest.html" in output
 
 
+def test_scan_notify_posts_notification(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli.Config, "load", lambda _: object())
+    monkeypatch.setattr(cli, "scan", lambda _: [Finding("logs", "/tmp/logs", 100, "auto_safe", "old logs")])
+    monkeypatch.setattr(cli, "check_tools", lambda: [ToolStatus("git", "ok", "/usr/bin/git")])
+    monkeypatch.setattr(cli, "write_reports", lambda *_: ("/tmp/report.md", "/tmp/report.json", "/tmp/latest.html"))
+    monkeypatch.setattr(cli, "notify_scan_complete", lambda summary: calls.append(summary) or True)
+    monkeypatch.setattr("sys.argv", ["mac-care", "scan", "--notify"])
+
+    assert cli.main() == 0
+
+    assert len(calls) == 1
+
+
 def test_schedule_install_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(cli.Config, "load", lambda _: object())
     monkeypatch.setattr(cli, "install_schedule", lambda *_args, **_kwargs: type("Result", (), {"message": "<plist/>"})())

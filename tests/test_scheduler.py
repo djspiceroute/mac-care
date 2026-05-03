@@ -8,11 +8,11 @@ from mac_care import scheduler
 def test_render_plist_runs_scan_only(tmp_path):
     config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
 
-    plist = scheduler.render_plist(config, interval_hours=6, program_arguments=["/bin/mac-care", "scan"])
+    plist = scheduler.render_plist(config, interval_hours=6, program_arguments=["/bin/mac-care", "scan", "--notify"])
     payload = plistlib.loads(plist.encode("utf-8"))
 
     assert payload["Label"] == scheduler.LABEL
-    assert payload["ProgramArguments"] == ["/bin/mac-care", "scan"]
+    assert payload["ProgramArguments"] == ["/bin/mac-care", "scan", "--notify"]
     assert payload["StartInterval"] == 21600
     assert "clean" not in payload["ProgramArguments"]
 
@@ -20,7 +20,7 @@ def test_render_plist_runs_scan_only(tmp_path):
 def test_install_schedule_dry_run_does_not_write(monkeypatch, tmp_path):
     plist_path = tmp_path / "com.mac-care.periodic.plist"
     monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
-    monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan"])
+    monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan", "--notify"])
     config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
 
     result = scheduler.install_schedule(config, interval_hours=12, dry_run=True)
@@ -33,7 +33,7 @@ def test_install_schedule_dry_run_does_not_write(monkeypatch, tmp_path):
 def test_install_schedule_writes_plist(monkeypatch, tmp_path):
     plist_path = tmp_path / "LaunchAgents" / "com.mac-care.periodic.plist"
     monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
-    monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan"])
+    monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan", "--notify"])
     config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
 
     result = scheduler.install_schedule(config, interval_hours=24, dry_run=False)
@@ -41,7 +41,7 @@ def test_install_schedule_writes_plist(monkeypatch, tmp_path):
     assert result.plist_path == plist_path
     assert plist_path.exists()
     payload = plistlib.loads(plist_path.read_bytes())
-    assert payload["ProgramArguments"] == ["/bin/mac-care", "scan"]
+    assert payload["ProgramArguments"] == ["/bin/mac-care", "scan", "--notify"]
 
 
 def test_uninstall_schedule_dry_run_does_not_remove(monkeypatch, tmp_path):

@@ -31,7 +31,8 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Scan output flags | `mac-care scan --stdout` | Print JSON or Markdown to stdout for piping; skip writing files |
 | launchd schedule | `mac-care schedule install` | Writes scan-only plist to `~/Library/LaunchAgents/`; `--dry-run` prints plist |
 | launchd uninstall | `mac-care schedule uninstall` | Removes plist and attempts launchctl unload; `--dry-run` prints planned removal |
-| Schedule interval config | `--interval <hours>` | Default 24h; uses launchd `StartInterval`; runs `mac-care scan` only |
+| Schedule interval config | `--interval <hours>` | Default 24h; uses launchd `StartInterval`; runs `mac-care scan --notify` only |
+| macOS scan notification | `mac-care scan --notify` | Posts compact scan summary through `osascript`; degrades gracefully |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
@@ -124,17 +125,18 @@ Key categories protected by default:
 - **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. `tools/disk.py` uses `dua` as primary — `gdu` integration is deferred until resolved (possible fix: fingerprint binary via `--help` output before use).
 - **Pearcleaner not yet live-tested.** `tools/pearcleaner.py` is complete and tested with mocks. Live test pending issue #7.
 - **No scan output format flags yet.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is in progress (issue #6).
-- **Notifications not yet built.** Scheduled scans generate reports/logs but do not post macOS notifications until issue #11 lands.
+- **Interactive notification actions are not implemented.** Notifications summarize the scan only; review still happens in reports.
 
 ---
 
 ## Test Coverage
 
-87 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+91 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
 | `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
+| `tests/test_notification.py` | Notification text and graceful `osascript` delivery behavior |
 | `tests/test_scheduler.py` | launchd plist rendering, dry-run install/uninstall, plist write/remove using temp paths |
 | `tests/test_report.py` | Markdown/JSON/HTML rendering, risk grouping, read-only dashboard guard |
 | `tests/test_summary.py` | Risk totals, top findings, tool warning count |
@@ -188,6 +190,8 @@ mac-care schedule install --interval 24
 mac-care schedule uninstall --dry-run
 mac-care schedule uninstall
 ```
+
+Scheduled scans use `mac-care scan --notify`, which writes reports and posts a compact macOS notification. Notification delivery failures are ignored so scan/report generation still succeeds.
 
 | Source | Category examples | Risk |
 |---|---|---|
