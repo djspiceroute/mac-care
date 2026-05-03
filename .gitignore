@@ -9,3 +9,4 @@ build/
 AGENTS.local.md
 CLAUDE.md
 .claude/
+.gemini.md
