@@ -7,3 +7,5 @@ dist/
 build/
 .gitnexus
 AGENTS.local.md
+CLAUDE.md
+.claude/
