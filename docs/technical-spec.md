@@ -27,8 +27,17 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Developer tool health | `mac-care doctor` | Required tools, Homebrew PATH, Docker daemon |
 | Tool status | `mac-care tools status` | Required + optional tools installed/missing |
 | Tool recommendations | `mac-care tools recommend` | Missing OSS tools with `brew install` hints, grouped |
+| Compact scan summary | `mac-care scan` | Counts and sizes by risk, top findings, tool warning count |
+| Scan output flags | `mac-care scan --stdout` | Print JSON or Markdown to stdout for piping; skip writing files |
+| launchd schedule | `mac-care schedule install` | Writes scan-only plist to `~/Library/LaunchAgents/`; `--dry-run` prints plist |
+| launchd uninstall | `mac-care schedule uninstall` | Removes plist and attempts launchctl unload; `--dry-run` prints planned removal |
+| Schedule interval config | `--interval <hours>` | Default 24h; uses launchd `StartInterval`; runs `mac-care scan --notify` only |
+| macOS scan notification | `mac-care scan --notify` | Posts compact scan summary through `osascript`; degrades gracefully |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
-| Markdown + JSON reports | `mac-care scan` | Timestamped, written to `~/Documents/MacCare/reports/` |
+| Quarantine cleanup execution | `mac-care clean --safe --execute` | Moves eligible `auto_safe` findings to quarantine with metadata; never `rm` |
+| Review approval flow | `mac-care review approve` | Approves one `review` finding by stable report finding ID; quarantine-only on execute |
+| Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
+| Report history index | `mac-care scan` | Writes read-only `index.html` listing previous JSON/Markdown/dashboard reports |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
 | GitHub Actions CI | `.github/workflows/test.yml` | `macos-latest`, Python 3.11, 73 tests |
 | Branch protection | GitHub | Requires CI to pass before merge to main |
@@ -42,9 +51,9 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 | Feature | Issue | Notes |
 |---|---|---|
-| Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | `mac-care clean --safe --execute` moves to `quarantine_dir`, never `rm` |
-| Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Interactive per-item confirmation for `review` findings |
-| Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Backend safety contract for any UI-triggered cleanup |
+| Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | Implemented for eligible item-level/rebuildable findings; broad containers remain skipped |
+| Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Implemented as stable-ID approval from JSON reports; dashboard wiring remains future work |
+| Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Documented in `docs/dashboard-action-safety.md`; implementation remains future work |
 
 #### Epic: Unified local report viewer ([#2](https://github.com/djspiceroute/mac-care/issues/2))
 
@@ -52,7 +61,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 |---|---|---|
 | Compact scan summary model | [#8](https://github.com/djspiceroute/mac-care/issues/8) | Lightweight summary struct for dashboard and notifications |
 | HTML dashboard from scan results | [#9](https://github.com/djspiceroute/mac-care/issues/9) | Static HTML report generated alongside Markdown + JSON |
-| Report history index | [#10](https://github.com/djspiceroute/mac-care/issues/10) | Track consecutive scans; surface what grew since last run |
+| Report history index | [#10](https://github.com/djspiceroute/mac-care/issues/10) | Implemented as read-only `index.html`; trend deltas remain future work |
 | Stdout and format flags | [#6](https://github.com/djspiceroute/mac-care/issues/6) | `mac-care scan --stdout --format json/markdown` for piping |
 
 #### Epic: Periodic local scan workflow ([#3](https://github.com/djspiceroute/mac-care/issues/3))
@@ -66,7 +75,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 | Feature | Issue | Notes |
 |---|---|---|
-| Pearcleaner live test | [#7](https://github.com/djspiceroute/mac-care/issues/7) | Install and run real scan; integration is mock-tested only today |
+| Pearcleaner live test | [#7](https://github.com/djspiceroute/mac-care/issues/7) | Installed cask and verified CLI; `list-orphaned` timed out live |
 
 ---
 
@@ -95,7 +104,7 @@ All are optional — mac-care degrades gracefully when absent.
 | `dust` | `brew install dust` | `tools/disk.py` (planned secondary) | Rust-based directory size tree |
 | `gdu` | `brew install gdu` | Not integrated | Name collision with GNU `du` on machines with `coreutils` installed |
 | `ncdu` | `brew install ncdu` | Not integrated | Interactive ncurses disk usage |
-| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | Pending live test (#7) |
+| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | CLI verified; `list-orphaned` timed out live |
 | `mas` | `brew install mas` | Not yet integrated | Mac App Store CLI |
 | KnockKnock | Manual download (Objective-See) | Planned `mac-care security` | Security persistence scanner |
 
@@ -115,21 +124,29 @@ Key categories protected by default:
 
 ## Known Constraints
 
-- **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path is a stub pending quarantine implementation (issue #12).
+- **Quarantine execution is intentionally narrow.** `mac-care clean --safe --execute` moves eligible `auto_safe` findings to quarantine, but broad container findings such as `user_caches`, `user_logs`, `trash`, and `tmp` are skipped until scan itemizes their contents.
 - **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. `tools/disk.py` uses `dua` as primary — `gdu` integration is deferred until resolved (possible fix: fingerprint binary via `--help` output before use).
-- **Pearcleaner not yet live-tested.** `tools/pearcleaner.py` is complete and tested with mocks. Live test pending issue #7.
+- **Pearcleaner live constraint.** Pearcleaner 5.4.3 installed successfully via Homebrew cask and linked `/opt/homebrew/bin/pearcleaner`. `pearcleaner --help` confirms `list-orphaned`, but the real `pearcleaner list-orphaned` call did not return within 60 seconds on this machine. The wrapper's timeout path returned `[]` as intended, so scans stay responsive and Pearcleaner findings remain optional/review-only.
 - **No scan output format flags yet.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is in progress (issue #6).
-- **launchd scheduler not yet built.** Periodic automated scanning requires `mac-care schedule install` (issue #5).
+- **Interactive notification actions are not implemented.** Notifications summarize the scan only; review still happens in reports.
 
 ---
 
 ## Test Coverage
 
-73 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+107 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
-| `tests/test_report.py` | Markdown rendering, risk grouping |
+| `tests/test_clean.py` | Dry-run default, quarantine moves, metadata, protected-path re-check, non-itemized skip |
+| `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
+| `tests/test_history.py` | Report history loading, malformed report skipping, index rendering/writing |
+| `tests/test_ids.py` | Stable finding ID behavior |
+| `tests/test_notification.py` | Notification text and graceful `osascript` delivery behavior |
+| `tests/test_scheduler.py` | launchd plist rendering, dry-run install/uninstall, plist write/remove using temp paths |
+| `tests/test_report.py` | Markdown/JSON/HTML rendering, risk grouping, read-only dashboard guard |
+| `tests/test_review.py` | Review approval dry-run, quarantine execution, protected/unknown finding rejection |
+| `tests/test_summary.py` | Risk totals, top findings, tool warning count |
 | `tests/test_git_safety.py` | `find_git_repos`, `is_dirty`, `has_active_worktrees`, `unsafe_repos` — all degradation paths |
 | `tests/test_doctor.py` | `recommend_tools` — missing/installed/empty/key/brew-prefix |
 | `tests/tools/test_brew.py` | `_parse_size`, full parse, sizes, risk/source tagging, all degradation |
@@ -146,6 +163,58 @@ Key categories protected by default:
 ---
 
 ## Example scan output shape
+
+Reports include a reusable compact summary used by CLI output and intended for future HTML reports and notifications:
+
+```json
+{
+  "summary": {
+    "risks": {
+      "auto_safe": {"count": 12, "size_bytes": 109000000},
+      "review": {"count": 4, "size_bytes": 9800000000},
+      "protected": {"count": 1, "size_bytes": 3200000000}
+    },
+    "top_findings": [],
+    "tool_warning_count": 2
+  }
+}
+```
+
+JSON report findings also include stable IDs used for review approval:
+
+```json
+{
+  "findings": [
+    {
+      "id": "3b6d0f0d9a8c1e2f",
+      "category": "orphaned_app_files",
+      "risk": "review"
+    }
+  ]
+}
+```
+
+Pipe-friendly scan output skips file writing and emits a single report format:
+
+```bash
+mac-care scan --stdout --format json
+mac-care scan --stdout --format markdown
+```
+
+Default scan writes `latest.html` as a static local dashboard alongside timestamped Markdown and JSON reports. The HTML is read-only by design: it summarizes findings, risk groups, top findings, and doctor output, but does not include cleanup action controls.
+
+Periodic scan scheduling is launchd-based and scan-only:
+
+```bash
+mac-care schedule install --dry-run
+mac-care schedule install --interval 24
+mac-care schedule uninstall --dry-run
+mac-care schedule uninstall
+```
+
+Scheduled scans use `mac-care scan --notify`, which writes reports and posts a compact macOS notification. Notification delivery failures are ignored so scan/report generation still succeeds.
+
+Each default scan also updates `index.html` in the reports directory. The index is read-only and lists historical JSON/Markdown/dashboard reports in reverse chronological order, skipping malformed JSON reports safely.
 
 | Source | Category examples | Risk |
 |---|---|---|
@@ -170,5 +239,6 @@ Key categories protected by default:
 | 2026-05-02 | `gdu` integration deferred | Name collision with GNU du — needs binary fingerprinting before use |
 | 2026-05-02 | Docker findings all `review` | Docker cleanup is stateful and non-trivial; always require user intent |
 | 2026-05-02 | Pearcleaner all `review` | Orphaned file determination is heuristic; human confirmation is necessary |
+| 2026-05-02 | Keep Pearcleaner timeout degradation | Live `list-orphaned` can hang; wrapper should return `[]` rather than block scan |
 | 2026-05-02 | Quarantine dir instead of `rm` | One-way door prevention; files can be recovered from quarantine |
 | 2026-05-02 | Repo made public | Enables GitHub Actions CI and branch protection on free tier |

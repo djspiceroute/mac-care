@@ -61,6 +61,8 @@ Acts on `auto_safe` findings only. Re-checks the git safety gate before touching
 
 **Rule:** Only `auto_safe` risk findings are eligible. `review` and `protected` are never touched.
 
+`--execute` moves eligible item-level/rebuildable findings to quarantine. Broad container findings such as `user_caches`, `user_logs`, `trash`, and `tmp` remain skipped until scan itemizes their contents. Every move writes metadata with the original path, quarantine path, risk, source, reason, and timestamp.
+
 ### `doctor.py`
 Checks required developer tools (`REQUIRED_TOOLS`), optional OSS integrations (`OSS_OPTIONAL_TOOLS`), Homebrew PATH, and Docker daemon reachability. `recommend_tools()` returns missing optional tools with install hints from `TOOL_RECOMMENDATIONS`.
 
@@ -79,6 +81,13 @@ Loads `~/.config/mac-care/config.toml` with fallback to hardcoded defaults. Retu
 
 ### `report.py`
 Writes Markdown + JSON reports to `config.reports_dir`. Reports are timestamped and never overwritten. The Markdown groups findings by risk level with size totals.
+
+JSON report findings include a stable `id` derived from category, path, risk, source, and reason. Review approval actions must reference this ID rather than accepting arbitrary paths from user input.
+
+### `review.py`
+Loads a known JSON report and approves one `review` finding by stable ID. The first command path is dry-run; execution delegates to the quarantine move path in `clean.py`.
+
+**Rule:** `protected` findings are rejected, and arbitrary filesystem paths are never accepted from the review command.
 
 ### `scheduler.py` *(planned)*
 Will write/remove a launchd plist at `~/Library/LaunchAgents/com.mac-care.periodic.plist` that runs `mac-care scan` on a configurable interval. Must support `--dry-run` to print the plist without writing it.
@@ -153,6 +162,8 @@ CLI source verified from [alienator88/Pearcleaner — Logic/CLI.swift](https://g
 
 All findings are `review` risk — never auto-cleaned.
 
+Live validation note: Pearcleaner 5.4.3 installed via Homebrew cask and `pearcleaner --help` confirms the `list-orphaned` subcommand. On this machine, `pearcleaner list-orphaned` did not return within 60 seconds, so the wrapper timeout is part of the safety contract and should remain fail-closed to `[]`.
+
 ---
 
 ## Report Structure
@@ -198,4 +209,5 @@ These must hold at all times. Tests should catch regressions.
 4. Git safety gate returns `True` (unsafe) on any subprocess failure — never silently clears a repo.
 5. Every `tools/` wrapper returns `[]` on any error — never propagates exceptions to the caller.
 6. `dry_run=True` is the default for `safe_clean()`. Callers must explicitly pass `dry_run=False` to act.
-7. Deletion (when implemented) moves to `quarantine_dir`, never `rm`.
+7. Execution moves to `quarantine_dir`, never `rm`.
+8. Review approval accepts only stable finding IDs from known reports, never arbitrary browser/CLI paths.
