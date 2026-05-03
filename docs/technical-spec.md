@@ -28,6 +28,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Tool status | `mac-care tools status` | Required + optional tools installed/missing |
 | Tool recommendations | `mac-care tools recommend` | Missing OSS tools with `brew install` hints, grouped |
 | Compact scan summary | `mac-care scan` | Counts and sizes by risk, top findings, tool warning count |
+| Scan output flags | `mac-care scan --stdout` | Print JSON or Markdown to stdout for piping; skip writing files |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Markdown + JSON reports | `mac-care scan` | Timestamped, written to `~/Documents/MacCare/reports/` |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
@@ -126,10 +127,11 @@ Key categories protected by default:
 
 ## Test Coverage
 
-75 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+79 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
+| `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
 | `tests/test_report.py` | Markdown rendering, risk grouping |
 | `tests/test_summary.py` | Risk totals, top findings, tool warning count |
 | `tests/test_git_safety.py` | `find_git_repos`, `is_dirty`, `has_active_worktrees`, `unsafe_repos` — all degradation paths |
@@ -163,6 +165,13 @@ Reports include a reusable compact summary used by CLI output and intended for f
     "tool_warning_count": 2
   }
 }
+```
+
+Pipe-friendly scan output skips file writing and emits a single report format:
+
+```bash
+mac-care scan --stdout --format json
+mac-care scan --stdout --format markdown
 ```
 
 | Source | Category examples | Risk |

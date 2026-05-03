@@ -6,7 +6,7 @@ from .clean import safe_clean
 from .config import Config
 from .doctor import check_tools, recommend_tools
 from .model import format_bytes
-from .report import write_reports
+from .report import render_json, render_markdown, write_reports
 from .scan import scan
 from .summary import summarize_scan
 
@@ -16,7 +16,14 @@ def main() -> int:
     parser.add_argument("--config", help="Path to config.toml")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("scan", help="Scan cleanup opportunities and write reports")
+    scan_parser = subparsers.add_parser("scan", help="Scan cleanup opportunities and write reports")
+    scan_parser.add_argument("--stdout", action="store_true", help="Print report to stdout instead of writing files")
+    scan_parser.add_argument(
+        "--format",
+        choices=["json", "markdown"],
+        default="markdown",
+        help="Output format when --stdout is used",
+    )
     subparsers.add_parser("doctor", help="Check developer tool health")
 
     tools_parser = subparsers.add_parser("tools", help="OSS tool status and recommendations")
@@ -52,6 +59,13 @@ def main() -> int:
     tools = check_tools()
 
     if args.command == "scan":
+        if args.stdout:
+            if args.format == "json":
+                print(render_json(findings, tools))
+            else:
+                print(render_markdown(findings, tools))
+            return 0
+
         md_path, json_path = write_reports(config, findings, tools)
         summary = summarize_scan(findings, tools)
         total = sum(item.size_bytes for item in findings)

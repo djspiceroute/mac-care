@@ -8,20 +8,27 @@ from .model import Finding, ToolStatus, format_bytes
 from .summary import RISK_ORDER, summarize_scan
 
 
+def report_payload(findings: list[Finding], tools: list[ToolStatus]) -> dict:
+    summary = summarize_scan(findings, tools)
+    return {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "summary": summary.to_dict(),
+        "findings": [finding.__dict__ for finding in findings],
+        "tools": [tool.__dict__ for tool in tools],
+    }
+
+
+def render_json(findings: list[Finding], tools: list[ToolStatus]) -> str:
+    return json.dumps(report_payload(findings, tools), indent=2)
+
+
 def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatus]) -> tuple[str, str]:
     config.ensure_dirs()
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     json_path = config.reports_dir / f"mac-care-{stamp}.json"
     md_path = config.reports_dir / f"mac-care-{stamp}.md"
 
-    summary = summarize_scan(findings, tools)
-    payload = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "summary": summary.to_dict(),
-        "findings": [finding.__dict__ for finding in findings],
-        "tools": [tool.__dict__ for tool in tools],
-    }
-    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    json_path.write_text(render_json(findings, tools), encoding="utf-8")
     md_path.write_text(render_markdown(findings, tools), encoding="utf-8")
     return str(md_path), str(json_path)
 
