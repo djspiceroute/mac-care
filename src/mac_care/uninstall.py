@@ -9,6 +9,9 @@ from .config import Config
 from .model import Finding, format_bytes, path_size
 from .tools.pearcleaner import _pearcleaner_bin
 
+# Order matters: resolve() resolves symlinks, so we compare against resolved bases
+_DEFAULT_APP_BASES: tuple[Path, ...] = (Path("/Applications"), Path.home() / "Applications")
+
 
 @dataclass
 class UninstallResult:
@@ -30,6 +33,45 @@ def find_app(name: str) -> Path | None:
                 if item.suffix == ".app" and item.stem.lower() == name.lower():
                     return item
     return None
+
+
+def validate_app_bundle(
+    app_path: Path, *, allowed_bases: tuple[Path, ...] = _DEFAULT_APP_BASES
+) -> bool:
+    """Validate that *app_path* is a real, trusted macOS app bundle.
+
+    Checks:
+        - exists
+        - resolves to a path under one of *allowed_bases*
+        - name ends with ``.app``
+        - is a directory (not a symlink or file)
+        - contains ``Contents/Info.plist``
+    """
+    if not app_path.exists():
+        return False
+
+    resolved = app_path.resolve()
+
+    # Must be under an allowed base directory
+    if not any(
+        resolved == base.resolve() or base.resolve() in resolved.parents
+        for base in allowed_bases
+    ):
+        return False
+
+    # Must look like a bundle
+    if not resolved.name.endswith(".app"):
+        return False
+
+    # Must be a real directory, not a symlink
+    if app_path.is_symlink():
+        return False
+
+    # Must contain the canonical plist
+    if not (resolved / "Contents" / "Info.plist").exists():
+        return False
+
+    return True
 
 
 def discover_support_files(app_path: Path) -> list[Finding]:
@@ -131,10 +173,28 @@ def _read_bundle_id(app_path: Path) -> str | None:
         return None
 
 
-def app_deletion_hint(app_path: Path) -> str:
-    """Return an appropriate deletion hint based on actual write permissions."""
+def app_deletion_hint(
+    app_path: Path | None, *, allowed_bases: tuple[Path, ...] = _DEFAULT_APP_BASES
+) -> str:
+    """Return an appropriate deletion hint based on actual write permissions.
+
+    Privileged removal guidance is shown ONLY after the app bundle passes
+    strict validation (validate_app_bundle). Untrusted or invalid paths
+    never receive sudo guidance.
+    """
+    if app_path is None:
+        return ""
+
+    if not validate_app_bundle(app_path, allowed_bases=allowed_bases):
+        return (
+            f"App bundle validation failed for '{app_path}'.\n"
+            "  Privileged removal guidance is hidden for unverified paths.\n"
+            "  Remove the app manually via Finder if appropriate."
+        )
+
     if os.access(app_path, os.W_OK):
         return f"You own this app — to remove it: trash '{app_path}'"
+
     return (
         f"This app requires elevated permissions to remove:\n"
         f"  sudo rm -rf '{app_path}'\n"
