@@ -8,7 +8,9 @@ from .actions import preview_restore_action, restore_action
 from .clean import safe_clean
 from .compare import compare_reports, render_compare_json, render_compare_markdown
 from .config import Config
+from .explain import explain_category, explain_finding
 from .export import export_obsidian
+from .history import load_history
 from .privacy import TCC_DB, audit_privacy, check_fda, render_privacy_text
 from .uninstall import UninstallResult, app_deletion_hint, discover_support_files, find_app, quarantine_finding, render_uninstall_report
 from .doctor import check_tools, recommend_tools
@@ -88,6 +90,10 @@ def main() -> int:
         "--format", choices=["markdown", "json"], default="markdown",
         help="Output format (default: markdown)",
     )
+
+    explain_parser = subparsers.add_parser("explain", help="Explain the rationale behind a finding or category")
+    explain_parser.add_argument("identifier", help="Finding ID or category name")
+    explain_parser.add_argument("--report", help="Path to a mac-care JSON report (defaults to latest)")
 
     review_parser = subparsers.add_parser("review", help="Approve review-risk findings from a report")
     review_subparsers = review_parser.add_subparsers(dest="review_action", required=True)
@@ -187,6 +193,25 @@ def main() -> int:
             print(render_compare_json(summary))
         else:
             print(render_compare_markdown(summary, Path(args.report1), Path(args.report2)))
+        return 0
+
+    if args.command == "explain":
+        report_path = None
+        if args.report:
+            report_path = Path(args.report)
+        else:
+            history = load_history(config.reports_dir)
+            if history:
+                report_path = history[0].json_path
+
+        # If it looks like a finding ID (hex, length 16) and we have a report, try explain_finding
+        is_id = len(args.identifier) == 16 and all(c in "0123456789abcdef" for c in args.identifier.lower())
+        
+        if is_id and report_path:
+            print(explain_finding(args.identifier, report_path))
+        else:
+            # Fallback to category explanation
+            print(explain_category(args.identifier))
         return 0
 
     if args.command == "review":
