@@ -1,0 +1,20 @@
+[policy]
+reports_dir = "~/Documents/MacCare/reports"
+quarantine_dir = "~/Documents/MacCare/quarantine"
+min_age_days = 14
+
+protected_paths = [
+  "~/.codex",
+  "~/.agents",
+  "~/multica",
+  "~/multica_workspaces",
+  "~/.vscode/extensions",
+  "~/Library/Application Support/Google/Chrome/NativeMessagingHosts",
+  "~/Library/Application Support/Mozilla/NativeMessagingHosts",
+]
+
+[tools]
+prefer_open_source = true
+disk_usage = ["gdu", "ncdu", "dust", "dua"]
+security = ["KnockKnock", "BlockBlock", "LuLu"]
+cleanup_candidates = ["mole", "cleardisk", "pearcleaner"]
