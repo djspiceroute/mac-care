@@ -99,6 +99,24 @@ def test_safe_clean_skips_non_itemized_auto_safe_categories(tmp_path):
     assert target.exists()
 
 
+def test_purge_skips_non_itemized_auto_safe_categories(tmp_path):
+    target = tmp_path / "Caches"
+    target.mkdir()
+    (target / "cache-file").write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+
+    actions = safe_clean(
+        [Finding("user_caches", str(target), 5, "auto_safe", "broad cache directory")],
+        config=config,
+        dry_run=False,
+        purge=True,
+    )
+
+    assert actions == ["skipped purge for user_caches: category is not itemized for permanent deletion yet"]
+    assert target.exists()
+    assert (target / "cache-file").exists()
+
+
 def test_purge_deletes_file(tmp_path):
     target = tmp_path / "cache-item"
     target.write_text("cache", encoding="utf-8")

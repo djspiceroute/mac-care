@@ -211,7 +211,7 @@ def main() -> int:
         return 0
 
     if args.command == "clean":
-        output = sys.stderr if args.stdout else sys.stdout
+        output = sys.stdout
 
         if args.purge:
             auto_safe = [f for f in findings if f.risk == "auto_safe"]
