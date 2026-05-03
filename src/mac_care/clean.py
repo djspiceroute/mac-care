@@ -20,17 +20,24 @@ _WORKSPACE_CATEGORIES = {"codex_workspaces"}
 _EXECUTABLE_AUTO_SAFE_CATEGORIES = {"brew_cache", "xcode_derived_data"}
 
 
-def safe_clean(findings: list[Finding], config: Config | None = None, dry_run: bool = True) -> list[str]:
+def safe_clean(
+    findings: list[Finding],
+    config: Config | None = None,
+    dry_run: bool = True,
+    purge: bool = False,
+) -> list[str]:
     actions: list[str] = []
     run_id = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     for finding in findings:
         if finding.risk != "auto_safe":
             continue
 
+        path = Path(finding.path).expanduser()
+
         # Re-run git safety gate for workspace-adjacent categories even if
         # scan already marked them auto_safe (belt-and-suspenders guard).
         if finding.category in _WORKSPACE_CATEGORIES:
-            dirty = unsafe_repos(Path(finding.path))
+            dirty = unsafe_repos(path)
             if dirty:
                 actions.append(
                     f"skipped {finding.category}: unsafe git repos detected at scan time — "
@@ -38,8 +45,16 @@ def safe_clean(findings: list[Finding], config: Config | None = None, dry_run: b
                 )
                 continue
 
+        if config and is_protected(path, config):
+            actions.append(f"skipped {finding.category}: protected path {path}")
+            continue
+
         if dry_run:
             actions.append(f"would clean {finding.category}: {finding.path}")
+            continue
+
+        if purge:
+            actions.append(_purge_finding(finding))
             continue
 
         if config is None:
@@ -56,6 +71,20 @@ def safe_clean(findings: list[Finding], config: Config | None = None, dry_run: b
 
         actions.append(quarantine_finding(finding, config, run_id=run_id))
     return actions
+
+
+def _purge_finding(finding: Finding) -> str:
+    path = Path(finding.path).expanduser()
+    if not path.exists():
+        return f"skipped {finding.category}: path no longer exists {path}"
+    try:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+        return f"purged {finding.category}: {path}"
+    except OSError as e:
+        return f"failed to purge {finding.category}: {path} — {e}"
 
 
 def quarantine_finding(finding: Finding, config: Config, run_id: str | None = None) -> str:

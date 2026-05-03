@@ -80,7 +80,7 @@ def test_safe_clean_rechecks_protected_paths(tmp_path):
         dry_run=False,
     )
 
-    assert actions == [f"skipped execution for brew_cache: protected path {target}"]
+    assert actions == [f"skipped brew_cache: protected path {target}"]
     assert target.exists()
 
 
@@ -96,4 +96,57 @@ def test_safe_clean_skips_non_itemized_auto_safe_categories(tmp_path):
     )
 
     assert actions == ["skipped execution for user_caches: category is not itemized for quarantine yet"]
+    assert target.exists()
+
+
+def test_purge_deletes_file(tmp_path):
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+
+    actions = safe_clean(
+        [Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")],
+        config=config,
+        dry_run=False,
+        purge=True,
+    )
+
+    assert actions == [f"purged brew_cache: {target}"]
+    assert not target.exists()
+
+
+def test_purge_deletes_directory(tmp_path):
+    target = tmp_path / "DerivedData"
+    target.mkdir()
+    (target / "file.txt").write_text("x", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+
+    actions = safe_clean(
+        [Finding("xcode_derived_data", str(target), 100, "auto_safe", "Xcode cache", "native")],
+        config=config,
+        dry_run=False,
+        purge=True,
+    )
+
+    assert actions == [f"purged xcode_derived_data: {target}"]
+    assert not target.exists()
+
+
+def test_purge_skips_protected_path(tmp_path):
+    target = tmp_path / "protected"
+    target.write_text("important", encoding="utf-8")
+    config = Config(
+        reports_dir=tmp_path / "reports",
+        quarantine_dir=tmp_path / "quarantine",
+        protected_paths=[target],
+    )
+
+    actions = safe_clean(
+        [Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")],
+        config=config,
+        dry_run=False,
+        purge=True,
+    )
+
+    assert "protected path" in actions[0]
     assert target.exists()

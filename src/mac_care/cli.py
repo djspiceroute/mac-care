@@ -49,6 +49,7 @@ def main() -> int:
     clean_parser.add_argument("--safe", action="store_true", help="Only consider auto_safe findings")
     clean_parser.add_argument("--dry-run", action="store_true", default=True, help="Do not delete anything")
     clean_parser.add_argument("--execute", action="store_true", help="Move eligible auto_safe findings to quarantine")
+    clean_parser.add_argument("--purge", action="store_true", help="Permanently delete all auto_safe findings (no quarantine, requires confirmation)")
 
     schedule_parser = subparsers.add_parser("schedule", help="Manage periodic launchd scans")
     schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
@@ -210,8 +211,34 @@ def main() -> int:
         return 0
 
     if args.command == "clean":
-        actions = safe_clean(findings, config=config, dry_run=not args.execute)
         output = sys.stderr if args.stdout else sys.stdout
+
+        if args.purge:
+            auto_safe = [f for f in findings if f.risk == "auto_safe"]
+            if not auto_safe:
+                print("No auto_safe findings to purge.", file=output)
+                return 0
+            total = sum(f.size_bytes for f in auto_safe)
+            print(
+                f"About to permanently delete {len(auto_safe)} auto_safe findings ({format_bytes(total)}). "
+                f"This cannot be undone.",
+                file=output,
+            )
+            confirm = input("Continue? [y/N] ").strip().lower()
+            if confirm != "y":
+                print("Aborted.", file=output)
+                return 0
+            actions = safe_clean(findings, config=config, dry_run=False, purge=True)
+            for action in actions:
+                print(action, file=output)
+            purged = [a for a in actions if a.startswith("purged ")]
+            purged_size = sum(
+                f.size_bytes for f in auto_safe if any(f.path in a for a in purged)
+            )
+            print(f"\nPurge complete. {len(purged)} item(s) permanently deleted ({format_bytes(purged_size)}).", file=output)
+            return 0
+
+        actions = safe_clean(findings, config=config, dry_run=not args.execute)
         for action in actions:
             print(action, file=output)
         if not args.execute:
