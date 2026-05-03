@@ -1,5 +1,7 @@
 from pathlib import Path
 import plistlib
+import shutil
+import sys
 
 from mac_care.config import Config
 from mac_care import scheduler
@@ -80,3 +82,44 @@ def test_uninstall_schedule_removes_existing_plist(monkeypatch, tmp_path):
 
     assert "Removed schedule" in result.message
     assert not plist_path.exists()
+
+
+def test_default_program_arguments_resolves_absolute_path(monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/mac-care" if cmd == "mac-care" else None)
+
+    args = scheduler.default_program_arguments()
+
+    assert args == ["/usr/local/bin/mac-care", "scan", "--notify"]
+
+
+def test_default_program_arguments_fallback_to_sys_executable(monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+
+    args = scheduler.default_program_arguments()
+
+    assert args == [sys.executable, "-m", "mac_care", "scan", "--notify"]
+
+
+def test_get_schedule_status_not_installed(monkeypatch, tmp_path):
+    plist_path = tmp_path / "nonexistent.plist"
+    monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
+
+    result = scheduler.get_schedule_status()
+
+    assert "No schedule installed" in result.message
+
+
+def test_get_schedule_status_installed(monkeypatch, tmp_path):
+    plist_path = tmp_path / "installed.plist"
+    payload = {
+        "ProgramArguments": ["/bin/mac-care", "scan", "--notify"],
+        "StartInterval": 86400,
+    }
+    plist_path.write_bytes(plistlib.dumps(payload))
+    monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
+
+    result = scheduler.get_schedule_status()
+
+    assert "Schedule installed" in result.message
+    assert "Executable: /bin/mac-care" in result.message
+    assert "Interval:   24h" in result.message
