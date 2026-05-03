@@ -11,7 +11,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 ## Feature Status
 
-### ✅ Shipped (main, as of 2026-05-02)
+### ✅ Shipped
 
 | Feature | Command | Notes |
 |---|---|---|
@@ -36,15 +36,37 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 ---
 
-### 🔜 Next sprint (planned, not started)
+### 🔜 In progress (GitHub issues open, Codex active)
 
-| Feature | Command | Notes |
+#### Epic: Quarantine-based cleanup ([#4](https://github.com/djspiceroute/mac-care/issues/4))
+
+| Feature | Issue | Notes |
 |---|---|---|
-| launchd schedule | `mac-care schedule install` | Writes plist to `~/Library/LaunchAgents/`; `--dry-run` prints plist |
-| launchd uninstall | `mac-care schedule uninstall` | Removes plist, unloads |
-| Schedule interval config | `--interval <hours>` | Default 24h; runs `mac-care scan` only (no clean) |
-| Scan output flags | `mac-care scan --stdout` | Print JSON or Markdown to stdout for piping; skip writing files |
-| Pearcleaner live test | — | Install `brew install --cask pearcleaner` and run real scan |
+| Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | `mac-care clean --safe --execute` moves to `quarantine_dir`, never `rm` |
+| Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Interactive per-item confirmation for `review` findings |
+| Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Backend safety contract for any UI-triggered cleanup |
+
+#### Epic: Unified local report viewer ([#2](https://github.com/djspiceroute/mac-care/issues/2))
+
+| Feature | Issue | Notes |
+|---|---|---|
+| Compact scan summary model | [#8](https://github.com/djspiceroute/mac-care/issues/8) | Lightweight summary struct for dashboard and notifications |
+| HTML dashboard from scan results | [#9](https://github.com/djspiceroute/mac-care/issues/9) | Static HTML report generated alongside Markdown + JSON |
+| Report history index | [#10](https://github.com/djspiceroute/mac-care/issues/10) | Track consecutive scans; surface what grew since last run |
+| Stdout and format flags | [#6](https://github.com/djspiceroute/mac-care/issues/6) | `mac-care scan --stdout --format json/markdown` for piping |
+
+#### Epic: Periodic local scan workflow ([#3](https://github.com/djspiceroute/mac-care/issues/3))
+
+| Feature | Issue | Notes |
+|---|---|---|
+| launchd schedule install/uninstall | [#5](https://github.com/djspiceroute/mac-care/issues/5) | Writes plist to `~/Library/LaunchAgents/`; `--dry-run` prints plist |
+| macOS notification after scheduled scan | [#11](https://github.com/djspiceroute/mac-care/issues/11) | Post summary notification on scan completion |
+
+#### Enablers
+
+| Feature | Issue | Notes |
+|---|---|---|
+| Pearcleaner live test | [#7](https://github.com/djspiceroute/mac-care/issues/7) | Install and run real scan; integration is mock-tested only today |
 
 ---
 
@@ -52,18 +74,14 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 | Feature | Notes |
 |---|---|
-| `mac-care security` | KnockKnock (Objective-See) integration — launch agents, login items, browser extensions, kernel extensions. Separate command, not part of `scan`. |
-| Actual deletion (quarantine) | `mac-care clean --safe --execute` moves files to `quarantine_dir` instead of `rm`. Needs confirmation prompt. |
-| Review-class cleanup with approval | Interactive approval flow for `review` findings. List → confirm each → quarantine. |
-| macOS notification after scan | Post a macOS notification with summary when scheduled scan completes. |
-| Menu bar / status item | Future — only after engine is proven useful. SwiftUI or Tauri. |
+| `mac-care security` | KnockKnock (Objective-See) integration — launch agents, login items, browser extensions. Separate command, not part of `scan`. |
 | `mas` integration | `mas outdated` for Mac App Store update checks. |
 | Stale npm/pnpm global packages | Surface outdated global packages. |
 | `brew` outdated formulae | Surface formulae with available updates (not just cache). |
-| Xcode simulator cleanup | `xcrun simctl delete unavailable` — rebuildable, auto_safe candidate. |
+| Xcode simulator cleanup | `xcrun simctl delete unavailable` — rebuildable, `auto_safe` candidate. |
 | Python venv orphan detection | Find `.venv` dirs whose parent project no longer exists. |
 | Large file finder | Top N largest files across home directory (excluding protected paths). |
-| Report history / trending | Compare consecutive reports to show what grew since last scan. |
+| Menu bar / status item | Only after engine is proven useful. SwiftUI or Tauri. |
 
 ---
 
@@ -71,37 +89,37 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 All are optional — mac-care degrades gracefully when absent.
 
-| Tool | Install | Used by | Status |
+| Tool | Install | Used by | Notes |
 |---|---|---|---|
-| `dua` | `brew install dua-cli` | `tools/disk.py` (primary) | ✅ Installed |
-| `dust` | `brew install dust` | `tools/disk.py` (not yet integrated — planned secondary) | ❌ Not installed |
-| `gdu` | `brew install gdu` | Not integrated (conflicts with GNU du on this machine) | ⚠️ Name collision |
-| `ncdu` | `brew install ncdu` | Not integrated | ❌ Not installed |
-| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | ❌ Not installed — pending live test |
-| `mas` | `brew install mas` | Not yet integrated | ✅ Installed |
-| `mole` | `brew install mole` | Not integrated (SSH tunnel manager — not relevant to scan) | ❌ Not installed |
-| KnockKnock | Manual download (Objective-See) | Planned `mac-care security` | ❌ Not installed |
+| `dua` | `brew install dua-cli` | `tools/disk.py` (primary) | Fast parallel disk usage tree |
+| `dust` | `brew install dust` | `tools/disk.py` (planned secondary) | Rust-based directory size tree |
+| `gdu` | `brew install gdu` | Not integrated | Name collision with GNU `du` on machines with `coreutils` installed |
+| `ncdu` | `brew install ncdu` | Not integrated | Interactive ncurses disk usage |
+| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | Pending live test (#7) |
+| `mas` | `brew install mas` | Not yet integrated | Mac App Store CLI |
+| KnockKnock | Manual download (Objective-See) | Planned `mac-care security` | Security persistence scanner |
 
 ---
 
 ## Protected Paths (Defaults)
 
-Defined in `src/mac_care/config.py:DEFAULT_PROTECTED_PATHS`. Never auto-cleaned regardless of risk level. The defaults protect common developer tooling paths and browser native messaging hosts. Override entirely via `protected_paths` in `config.toml`.
+Defined in `src/mac_care/config.py:DEFAULT_PROTECTED_PATHS`. Never auto-cleaned regardless of risk level. Override entirely via `protected_paths` in `config.toml`.
 
 Key categories protected by default:
 - VS Code extensions
 - Browser native messaging hosts (Chrome, Firefox)
+- `~/.ssh`
 - Any directory containing an active or dirty git repo (checked dynamically at runtime)
 
 ---
 
 ## Known Constraints
 
-- **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path exists in the interface but is a no-op stub pending quarantine implementation.
-- **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. The `tools/disk.py` module uses `dua` as primary — `gdu` integration is deferred until the name collision is resolved (possible fix: fingerprint binary via `--help` output before use).
-- **Pearcleaner not yet live-tested.** The `tools/pearcleaner.py` module is complete and tested with mocks. Live test pending `brew install --cask pearcleaner`.
-- **No scan output format flags.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is planned but not yet implemented.
-- **launchd scheduler not yet built.** Periodic automated scanning requires `mac-care schedule install`. Until then, scan must be run manually.
+- **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path is a stub pending quarantine implementation (issue #12).
+- **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. `tools/disk.py` uses `dua` as primary — `gdu` integration is deferred until resolved (possible fix: fingerprint binary via `--help` output before use).
+- **Pearcleaner not yet live-tested.** `tools/pearcleaner.py` is complete and tested with mocks. Live test pending issue #7.
+- **No scan output format flags yet.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is in progress (issue #6).
+- **launchd scheduler not yet built.** Periodic automated scanning requires `mac-care schedule install` (issue #5).
 
 ---
 
@@ -129,8 +147,6 @@ Key categories protected by default:
 
 ## Example scan output shape
 
-On a typical developer machine with Xcode, Docker, and active Homebrew usage, a scan surfaces findings across these categories:
-
 | Source | Category examples | Risk |
 |---|---|---|
 | Homebrew | Per-item stale formulae, old downloads | `auto_safe` |
@@ -151,8 +167,8 @@ On a typical developer machine with Xcode, Docker, and active Homebrew usage, a 
 | 2026-05-01 | Report-first, no deletion by default | Primary value is visibility, not automation |
 | 2026-05-01 | OSS orchestrator pattern | Trust brew/docker/dua output over reimplementing their logic |
 | 2026-05-02 | `dua` as disk primary, `du` as fallback | dua is fast and parallel; du is always available; both parse cleanly |
-| 2026-05-02 | `gdu` integration deferred | Name collision with GNU du on this machine — needs binary fingerprinting |
+| 2026-05-02 | `gdu` integration deferred | Name collision with GNU du — needs binary fingerprinting before use |
 | 2026-05-02 | Docker findings all `review` | Docker cleanup is stateful and non-trivial; always require user intent |
 | 2026-05-02 | Pearcleaner all `review` | Orphaned file determination is heuristic; human confirmation is necessary |
-| 2026-05-02 | Quarantine dir instead of `rm` | One-way door prevention; files at `~/Documents/MacCare/quarantine/` can be recovered |
+| 2026-05-02 | Quarantine dir instead of `rm` | One-way door prevention; files can be recovered from quarantine |
 | 2026-05-02 | Repo made public | Enables GitHub Actions CI and branch protection on free tier |
