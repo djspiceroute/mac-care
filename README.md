@@ -1,6 +1,6 @@
 # mac-care
 
-Local macOS maintenance for a developer machine. A free, self-hosted replacement for the practical parts of CleanMyMac — report-first, no surprise deletions, OSS tools as backends.
+Local macOS maintenance for a developer machine. A free, self-hosted alternative to tools like CleanMyMac — report-first, no surprise deletions, OSS tools as backends.
 
 [![Tests](https://github.com/djspiceroute/mac-care/actions/workflows/test.yml/badge.svg)](https://github.com/djspiceroute/mac-care/actions/workflows/test.yml)
 
@@ -22,7 +22,8 @@ Local macOS maintenance for a developer machine. A free, self-hosted replacement
 ## Quick start
 
 ```bash
-cd ~/Developer/mac-care
+git clone https://github.com/djspiceroute/mac-care.git
+cd mac-care
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -37,19 +38,19 @@ mac-care scan
 Runs all scanners, writes a Markdown + JSON report to `~/Documents/MacCare/reports/`.
 
 ```
-Scanned 97 findings, 25.4 GB observed.
-Markdown report: ~/Documents/MacCare/reports/mac-care-2026-05-02-210826.md
-JSON report:     ~/Documents/MacCare/reports/mac-care-2026-05-02-210826.json
+Scanned 42 findings, 8.3 GB observed.
+Markdown report: ~/Documents/MacCare/reports/mac-care-<timestamp>.md
+JSON report:     ~/Documents/MacCare/reports/mac-care-<timestamp>.json
 ```
 
 ### `mac-care doctor`
 Checks required developer tools and environment health.
 
 ```
-brew: ok - /opt/homebrew/bin/brew
-git: ok - /usr/bin/git
+brew: ok
+git: ok
 docker_daemon: ok - daemon is reachable
-homebrew_path: ok - /opt/homebrew/bin is on PATH
+homebrew_path: ok
 pnpm: missing - not on PATH
 ```
 
@@ -61,8 +62,8 @@ Lists missing optional OSS tools grouped by function, with install commands.
 
 ```
 Disk analysis:
+  dua     Fast parallel disk usage tree   →  brew install dua-cli
   dust    Rust-based directory size tree  →  brew install dust
-  ncdu    Classic ncurses disk usage      →  brew install ncdu
 
 App cleanup:
   pearcleaner  Orphaned app support files  →  brew install --cask pearcleaner
@@ -77,15 +78,15 @@ Prints what would be cleaned from `auto_safe` findings. Does not delete anything
 
 | Level | Meaning | Example |
 |---|---|---|
-| `auto_safe` | Rebuildable or explicitly safe per the source tool | Homebrew cache items (`brew cleanup --dry-run`), Xcode DerivedData |
-| `review` | Needs human confirmation before deletion | Docker volumes, old installers, Codex workspaces, orphaned app files |
-| `protected` | Never touched automatically | Active/dirty git repos, `~/.codex`, `~/.agents`, VS Code extensions |
+| `auto_safe` | Rebuildable or explicitly safe per the source tool | Homebrew cache items, Xcode DerivedData |
+| `review` | Needs human confirmation before deletion | Docker volumes, old installers, orphaned app files |
+| `protected` | Never touched automatically | Active/dirty git repos, paths listed in config |
 
 ---
 
 ## OSS integrations
 
-Each integration is in `src/mac_care/tools/` and degrades gracefully — if the tool is not installed, it returns an empty list and the scan continues.
+Each integration lives in `src/mac_care/tools/` and degrades gracefully — if the tool is not installed, it returns an empty list and the scan continues.
 
 | Module | Tool | What it surfaces |
 |---|---|---|
@@ -99,27 +100,10 @@ Finding sources are tagged in the `source` field: `native`, `brew`, `dua`, `dock
 ### Install recommended tools
 
 ```bash
-brew install dua-cli        # fast disk analysis (primary backend)
-brew install dust           # alternative disk tree
-brew install --cask pearcleaner  # orphaned app file scanner
+brew install dua-cli              # fast disk analysis (primary backend)
+brew install dust                 # alternative disk tree
+brew install --cask pearcleaner   # orphaned app file scanner
 ```
-
----
-
-## Protected paths (defaults)
-
-```
-~/.codex
-~/.agents
-~/multica
-~/multica_workspaces
-~/.vscode/extensions
-~/Library/Application Support/Google/Chrome/NativeMessagingHosts
-~/Library/Application Support/Mozilla/NativeMessagingHosts
-active or dirty git repositories and worktrees
-```
-
-Override in `~/.config/mac-care/config.toml` — see `examples/config.toml`.
 
 ---
 
@@ -134,11 +118,21 @@ quarantine_dir = "~/Documents/MacCare/quarantine"
 min_age_days   = 14
 
 protected_paths = [
-  "~/.codex",
-  "~/.agents",
-  "~/multica",
+  "~/.ssh",
+  "~/Projects/active-client",
+  "~/.vscode/extensions",
 ]
 ```
+
+See `examples/config.toml` for the full set of options.
+
+---
+
+## Protected paths
+
+Any path listed under `protected_paths` in config will never be auto-cleaned. In addition, any directory containing an active or dirty git repository is automatically treated as protected at runtime — this is checked dynamically before every scan and clean operation.
+
+Default protected paths are defined in `src/mac_care/config.py` and can be overridden entirely via config.
 
 ---
 
@@ -192,10 +186,9 @@ tests/
 See `docs/technical-spec.md` for full feature status and next priorities.
 
 **Next sprint:**
-- `mac-care schedule install` / `schedule uninstall` — launchd plist for periodic scan
-- Live test of Pearcleaner once installed (`brew install --cask pearcleaner`)
+- `mac-care schedule install` / `schedule uninstall` — launchd plist for periodic automated scan
 - `mac-care scan --stdout --format json` — pipe-friendly output without writing files
-- KnockKnock security persistence scan (Objective-See) as a separate `mac-care security` command
+- KnockKnock (Objective-See) integration as a separate `mac-care security` command
 
 ---
 

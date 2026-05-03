@@ -4,9 +4,7 @@
 
 Replace the practical operational value of CleanMyMac for a developer machine with a free, local, report-first CLI tool. No polished UI clone. No surprise deletions. Integrate good OSS tools rather than rebuilding commodity scanners.
 
-Owner: Deepankar Joshi  
 Repo: https://github.com/djspiceroute/mac-care  
-Local path: `~/Developer/mac-care`  
 Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 ---
@@ -88,25 +86,19 @@ All are optional — mac-care degrades gracefully when absent.
 
 ## Protected Paths (Defaults)
 
-Defined in `src/mac_care/config.py:DEFAULT_PROTECTED_PATHS`. Never auto-cleaned regardless of risk level.
+Defined in `src/mac_care/config.py:DEFAULT_PROTECTED_PATHS`. Never auto-cleaned regardless of risk level. The defaults protect common developer tooling paths and browser native messaging hosts. Override entirely via `protected_paths` in `config.toml`.
 
-```
-~/.codex
-~/.agents
-~/multica
-~/multica_workspaces
-~/.vscode/extensions
-~/Library/Application Support/Google/Chrome/NativeMessagingHosts
-~/Library/Application Support/Mozilla/NativeMessagingHosts
-any path containing a dirty or active git repo (dynamic — checked at runtime)
-```
+Key categories protected by default:
+- VS Code extensions
+- Browser native messaging hosts (Chrome, Firefox)
+- Any directory containing an active or dirty git repo (checked dynamically at runtime)
 
 ---
 
 ## Known Constraints
 
 - **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path exists in the interface but is a no-op stub pending quarantine implementation.
-- **`gdu` name collision.** On this machine, `gdu` in PATH is GNU `du` (from `brew install coreutils`), not the Go disk usage analyzer. The `tools/disk.py` module uses `dua` as primary — `gdu` integration is blocked until the name collision is resolved (possible workaround: check binary help output to distinguish).
+- **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. The `tools/disk.py` module uses `dua` as primary — `gdu` integration is deferred until the name collision is resolved (possible fix: fingerprint binary via `--help` output before use).
 - **Pearcleaner not yet live-tested.** The `tools/pearcleaner.py` module is complete and tested with mocks. Live test pending `brew install --cask pearcleaner`.
 - **No scan output format flags.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is planned but not yet implemented.
 - **launchd scheduler not yet built.** Periodic automated scanning requires `mac-care schedule install`. Until then, scan must be run manually.
@@ -135,21 +127,19 @@ any path containing a dirty or active git repo (dynamic — checked at runtime)
 
 ---
 
-## Real-world scan results (2026-05-02, this machine)
+## Example scan output shape
 
-| Source | Count | Size |
+On a typical developer machine with Xcode, Docker, and active Homebrew usage, a scan surfaces findings across these categories:
+
+| Source | Category examples | Risk |
 |---|---|---|
-| Homebrew (brew cleanup) | 83 items | ~109 MB |
-| Docker images | 1 | 9.8 GB reclaimable |
-| Docker build cache | 1 | 5.0 GB reclaimable |
-| Docker volumes | 1 | 197 MB reclaimable |
-| Docker containers | 1 | 1.2 MB reclaimable |
-| Gradle cache | 1 | 4.9 GB (review) |
-| user_caches | 1 | 4.1 GB (auto_safe) — largest: Google 1.3 GB, ms-playwright 1.0 GB |
-| Xcode DerivedData | 1 | 2.3 GB (auto_safe) |
-| user_logs | 1 | 26 MB (auto_safe) |
-| Codex workspaces | 1 | 38 MB (protected — dirty git repos) |
-| **Total** | **97** | **25.4 GB observed** |
+| Homebrew | Per-item stale formulae, old downloads | `auto_safe` |
+| Docker | Images, build cache, volumes, containers | `review` |
+| Disk | Xcode DerivedData, Gradle cache, user caches | `auto_safe` / `review` |
+| Disk (enriched) | Top subdirs listed in reason for dirs >500 MB | — |
+| Downloads | Old .dmg / .pkg / .zip past `min_age_days` | `review` |
+| Pearcleaner | Orphaned app support paths | `review` |
+| Git workspaces | Any workspace with active/dirty repos | `protected` |
 
 ---
 
