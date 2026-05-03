@@ -6,6 +6,7 @@ import time
 from .config import Config
 from .git_safety import unsafe_repos
 from .model import Finding, path_size
+from .safety import is_protected
 from .tools.brew import brew_cleanup_findings
 from .tools.disk import size_of, top_subdirs_summary
 from .tools.docker_check import docker_findings
@@ -20,7 +21,9 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_standard_paths(config))
     findings.extend(_developer_paths(config))
     findings.extend(_downloads_review(config))
-    findings.extend(_codex_workspace_review(config))
+    findings.extend(_workspace_review(Path.home() / "Documents/Codex", config))
+    for extra in config.additional_scan_paths:
+        findings.extend(_workspace_review(extra.expanduser(), config))
     findings.extend(brew_cleanup_findings())
     findings.extend(docker_findings())
     findings.extend(pearcleaner_findings())
@@ -69,12 +72,15 @@ def _downloads_review(config: Config) -> list[Finding]:
     return [Finding("old_installers", str(downloads), total, "review", f"installers older than {config.min_age_days} days")]
 
 
-def _codex_workspace_review(config: Config) -> list[Finding]:
-    codex_docs = Path.home() / "Documents/Codex"
-    if not codex_docs.exists():
+def _workspace_review(workspace_path: Path, config: Config) -> list[Finding]:
+    if not workspace_path.exists():
         return []
 
-    dirty = unsafe_repos(codex_docs)
+    if is_protected(workspace_path, config):
+        total = size_of(workspace_path)
+        return [Finding("codex_workspaces", str(workspace_path), total, "protected", "path is in protected list")]  # type: ignore[arg-type]
+
+    dirty = unsafe_repos(workspace_path)
     if dirty:
         repo_list = ", ".join(str(r) for r in dirty[:3])
         suffix = f" and {len(dirty) - 3} more" if len(dirty) > 3 else ""
@@ -84,18 +90,18 @@ def _codex_workspace_review(config: Config) -> list[Finding]:
         reason = "old agent workspaces can be large; active work must be checked before deletion"
         risk = "review"
 
-    total = size_of(codex_docs)
+    total = size_of(workspace_path)
     if total >= _BREAKDOWN_THRESHOLD_BYTES and risk != "protected":
-        summary = top_subdirs_summary(codex_docs)
+        summary = top_subdirs_summary(workspace_path)
         if summary:
             reason = f"{reason}; {summary}"
 
-    return [Finding("codex_workspaces", str(codex_docs), total, risk, reason)]  # type: ignore[arg-type]
+    return [Finding("codex_workspaces", str(workspace_path), total, risk, reason)]  # type: ignore[arg-type]
 
 
 def _finding(category: str, path: Path, risk: str, reason: str, config: Config) -> Finding:
     resolved = path.expanduser()
-    if _is_protected(resolved, config):
+    if is_protected(resolved, config):
         risk = "protected"
 
     total = size_of(resolved)
@@ -109,16 +115,3 @@ def _finding(category: str, path: Path, risk: str, reason: str, config: Config) 
     return Finding(category, str(resolved), total, risk, reason)  # type: ignore[arg-type]
 
 
-def _is_protected(path: Path, config: Config) -> bool:
-    try:
-        resolved = path.resolve()
-    except OSError:
-        resolved = path
-    for protected in config.protected_paths:
-        try:
-            protected_resolved = protected.resolve()
-        except OSError:
-            protected_resolved = protected
-        if resolved == protected_resolved or protected_resolved in resolved.parents:
-            return True
-    return False

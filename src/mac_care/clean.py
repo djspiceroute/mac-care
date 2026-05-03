@@ -9,6 +9,7 @@ import uuid
 from .config import Config
 from .git_safety import unsafe_repos
 from .model import Finding
+from .safety import is_protected
 
 # Categories whose paths may contain git repos — always re-check before acting.
 _WORKSPACE_CATEGORIES = {"codex_workspaces"}
@@ -60,7 +61,7 @@ def safe_clean(findings: list[Finding], config: Config | None = None, dry_run: b
 def quarantine_finding(finding: Finding, config: Config, run_id: str | None = None) -> str:
     run_id = run_id or datetime.now().strftime("%Y-%m-%d-%H%M%S")
     path = Path(finding.path).expanduser()
-    if _is_protected(path, config):
+    if is_protected(path, config):
         return f"skipped execution for {finding.category}: protected path {path}"
 
     if finding.category in _WORKSPACE_CATEGORIES:
@@ -80,26 +81,6 @@ def quarantine_finding(finding: Finding, config: Config, run_id: str | None = No
     _write_metadata(destination.parent, destination, finding)
     return f"quarantined {finding.category}: {path} -> {destination}"
 
-
-def _is_protected(path: Path, config: Config) -> bool:
-    try:
-        resolved = path.resolve()
-    except OSError:
-        resolved = path
-    for protected in config.protected_paths:
-        try:
-            protected_resolved = protected.resolve()
-        except OSError:
-            protected_resolved = protected
-        if resolved == protected_resolved or protected_resolved in resolved.parents:
-            return True
-
-    quarantine = config.quarantine_dir.expanduser()
-    try:
-        quarantine_resolved = quarantine.resolve()
-    except OSError:
-        quarantine_resolved = quarantine
-    return resolved == quarantine_resolved or quarantine_resolved in resolved.parents
 
 
 def _quarantine_path(config: Config, finding: Finding, run_id: str) -> Path:

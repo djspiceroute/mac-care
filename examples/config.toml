@@ -13,13 +13,20 @@ quarantine_dir = "~/Documents/MacCare/quarantine"
 min_age_days = 14
 
 # Paths that are never auto-cleaned, regardless of risk level.
-# Add any directory you want mac-care to always skip.
-# In addition to this list, any directory containing an active or dirty git repo
-# is automatically protected at runtime.
+# Replaces the default list entirely when set — include any defaults you want to keep.
+# Any directory containing an active or dirty git repo is also protected at runtime.
 protected_paths = [
+  "~/.codex",
   "~/.ssh",
   "~/.vscode/extensions",
   "~/Library/Application Support/Google/Chrome/NativeMessagingHosts",
   "~/Library/Application Support/Mozilla/NativeMessagingHosts",
   # "~/Projects/active-client",   # example: protect a specific project directory
 ]
+
+# Extra directories to scan for workspace/agent content (same logic as ~/Documents/Codex).
+# Add paths specific to your machine here rather than hardcoding them in code.
+# additional_scan_paths = [
+#   "~/Documents/MyAgents",
+#   "~/multica_workspaces",
+# ]
