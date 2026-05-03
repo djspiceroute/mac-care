@@ -69,4 +69,4 @@ class Config:
 
     def ensure_dirs(self) -> None:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-        self.quarantine_dir.mkdir(parents=True, exist_ok=True)
+        self.quarantine_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
