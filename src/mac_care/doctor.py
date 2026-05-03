@@ -193,6 +193,7 @@ def check_ssh_keys() -> list[ToolStatus]:
 
 # Common paths where language runtimes are installed outside the system default.
 _TOOLCHAIN_SEARCH_PATHS = [
+    str(Path.home() / ".cargo/bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
