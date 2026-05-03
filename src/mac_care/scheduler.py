@@ -57,7 +57,8 @@ def install_schedule(config: Config, interval_hours: int = 24, dry_run: bool = T
     (config.reports_dir.parent / "logs").mkdir(parents=True, exist_ok=True)
     PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     PLIST_PATH.write_text(plist_text, encoding="utf-8")
-    return ScheduleResult(PLIST_PATH, f"Installed schedule at {PLIST_PATH}")
+    activation_msg = _launchctl_load(PLIST_PATH)
+    return ScheduleResult(PLIST_PATH, f"Installed schedule at {PLIST_PATH}. {activation_msg}")
 
 
 def uninstall_schedule(dry_run: bool = True) -> ScheduleResult:
@@ -69,6 +70,28 @@ def uninstall_schedule(dry_run: bool = True) -> ScheduleResult:
         PLIST_PATH.unlink()
         return ScheduleResult(PLIST_PATH, f"Removed schedule at {PLIST_PATH}")
     return ScheduleResult(PLIST_PATH, f"No schedule found at {PLIST_PATH}")
+
+
+def _launchctl_load(plist_path: Path) -> str:
+    if not shutil.which("launchctl"):
+        return "launchctl not found — job will activate on next login."
+    import os
+    uid = str(os.getuid())
+    result = subprocess.run(
+        ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
+        check=False, capture_output=True, text=True, timeout=10,
+    )
+    if result.returncode == 0:
+        return "Job activated via launchctl bootstrap."
+    # Fall back to legacy load (pre-10.11 or if bootstrap fails)
+    fallback = subprocess.run(
+        ["launchctl", "load", str(plist_path)],
+        check=False, capture_output=True, text=True, timeout=10,
+    )
+    if fallback.returncode == 0:
+        return "Job activated via launchctl load (fallback)."
+    error = (result.stderr or fallback.stderr or "unknown error").strip().splitlines()[0]
+    return f"Job registered but activation failed ({error}) — it will activate on next login."
 
 
 def _launchctl_unload(plist_path: Path) -> None:

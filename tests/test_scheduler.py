@@ -34,6 +34,7 @@ def test_install_schedule_writes_plist(monkeypatch, tmp_path):
     plist_path = tmp_path / "LaunchAgents" / "com.mac-care.periodic.plist"
     monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
     monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan", "--notify"])
+    monkeypatch.setattr(scheduler, "_launchctl_load", lambda _: "Job activated via launchctl bootstrap.")
     config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
 
     result = scheduler.install_schedule(config, interval_hours=24, dry_run=False)
@@ -42,6 +43,20 @@ def test_install_schedule_writes_plist(monkeypatch, tmp_path):
     assert plist_path.exists()
     payload = plistlib.loads(plist_path.read_bytes())
     assert payload["ProgramArguments"] == ["/bin/mac-care", "scan", "--notify"]
+    assert "activated" in result.message
+
+
+def test_install_schedule_surfaces_activation_failure(monkeypatch, tmp_path):
+    plist_path = tmp_path / "LaunchAgents" / "com.mac-care.periodic.plist"
+    monkeypatch.setattr(scheduler, "PLIST_PATH", plist_path)
+    monkeypatch.setattr(scheduler, "default_program_arguments", lambda: ["/bin/mac-care", "scan", "--notify"])
+    monkeypatch.setattr(scheduler, "_launchctl_load", lambda _: "Job registered but activation failed (permission denied) — it will activate on next login.")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+
+    result = scheduler.install_schedule(config, interval_hours=24, dry_run=False)
+
+    assert plist_path.exists()
+    assert "next login" in result.message
 
 
 def test_uninstall_schedule_dry_run_does_not_remove(monkeypatch, tmp_path):

@@ -12,7 +12,6 @@ def finding_id(finding: Finding) -> str:
             finding.path,
             finding.risk,
             finding.source,
-            finding.reason,
         ]
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

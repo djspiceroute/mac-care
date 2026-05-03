@@ -76,7 +76,6 @@ TOOL_RECOMMENDATIONS: dict[str, dict[str, str]] = {
 }
 
 
-@staticmethod
 def _tool_installed(name: str) -> bool:
     return which(name) is not None
 

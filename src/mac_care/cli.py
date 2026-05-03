@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
 from .clean import safe_clean
 from .config import Config
@@ -135,10 +136,24 @@ def main() -> int:
 
     if args.command == "clean":
         actions = safe_clean(findings, config=config, dry_run=not args.execute)
+        output = sys.stderr if args.stdout else sys.stdout
         for action in actions:
-            print(action)
+            print(action, file=output)
         if not args.execute:
-            print("Dry run only. No files were deleted.")
+            print("Dry run only. No files were deleted.", file=output)
+        else:
+            quarantined = [a for a in actions if a.startswith("quarantined ")]
+            if quarantined:
+                total_size = sum(
+                    f.size_bytes for f in findings
+                    if f.risk == "auto_safe" and any(f.path in a for a in quarantined)
+                )
+                print(
+                    f"Execute complete. {len(quarantined)} item(s) quarantined ({format_bytes(total_size)}).",
+                    file=output,
+                )
+            else:
+                print("No actionable auto_safe findings found.", file=output)
         return 0
 
     parser.error("unknown command")
