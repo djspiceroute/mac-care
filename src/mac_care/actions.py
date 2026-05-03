@@ -120,7 +120,7 @@ def quarantine_action(finding: Finding, config: Config, run_id: str | None = Non
 
     run_id = run_id or datetime.now().strftime("%Y-%m-%d-%H%M%S")
     destination = _quarantine_path(config, finding, run_id)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     shutil.move(str(path), str(destination))
     _write_metadata(destination.parent, destination, finding)
     return ActionResult(

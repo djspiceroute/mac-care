@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 
 from mac_care.actions import (
@@ -178,3 +179,27 @@ def test_restore_action_skips_when_quarantined_item_missing(tmp_path):
 
     assert result.status == "skipped"
     assert result.render() == f"skipped restore: quarantined item no longer exists {quarantined.destination}"
+
+def test_quarantine_dir_created_with_restrictive_permissions(tmp_path):
+    import stat
+    quarantine = tmp_path / "quarantine"
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=quarantine)
+    config.ensure_dirs()
+    assert quarantine.exists()
+    assert stat.S_IMODE(quarantine.stat().st_mode) == 0o700
+
+
+def test_quarantine_run_dir_created_with_restrictive_permissions(tmp_path):
+    import stat
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+    finding = Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")
+    result = quarantine_action(finding, config, run_id="run-1")
+
+    assert result.status == "quarantined"
+    run_dir = config.quarantine_dir / "run-1"
+    assert run_dir.exists()
+    for directory in run_dir.rglob("*"):
+        if directory.is_dir():
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
