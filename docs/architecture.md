@@ -16,13 +16,22 @@ This means:
 ```
 mac-care scan
      │
-     ├── _standard_paths()        → native findings (logs, caches, trash, tmp)
-     ├── _developer_paths()       → native findings (Xcode, Gradle)
-     ├── _downloads_review()      → native findings (old installers)
-     ├── _codex_workspace_review() → native + git_safety gate
-     ├── brew_cleanup_findings()  → calls brew cleanup --dry-run
-     ├── docker_findings()        → calls docker system df
-     └── pearcleaner_findings()   → calls pearcleaner list-orphaned
+     ├── _standard_paths()           → logs, caches, trash, tmp
+     ├── _developer_paths()          → Xcode, Gradle
+     ├── _downloads_review()         → old installers
+     ├── _workspace_review()         → workspace dirs + git_safety gate
+     ├── _ios_backups()              → ~/Library/Application Support/MobileSync
+     ├── _messages_attachments()     → ~/Library/Messages/Attachments
+     ├── _time_machine_snapshots()   → tmutil listlocalsnapshots
+     ├── _core_dumps_and_crash_logs() → ~/Library/Logs/DiagnosticReports
+     ├── _broken_symlinks()          → common ~/Library/ dirs
+     ├── _login_items()              → ~/Library/LaunchAgents/
+     ├── _stale_runtime_versions()   → pyenv/nvm/rbenv/sdkman/rustup
+     ├── _orphaned_dotdirs()         → inactive ~/.<tool> dirs
+     ├── _ai_tool_caches()           → Copilot/Cursor/Windsurf/Ollama
+     ├── brew_cleanup_findings()     → brew cleanup --dry-run
+     ├── docker_findings()           → docker system df
+     └── pearcleaner_findings()      → pearcleaner list-orphaned
               │
               ▼
         list[Finding]
@@ -30,7 +39,7 @@ mac-care scan
      ┌────────┴────────┐
      │                 │
  write_reports()    safe_clean()
- (Markdown+JSON)   (dry-run only, re-checks git_safety)
+ (MD+JSON+HTML)    (dry-run default, re-checks safety.is_protected)
 ```
 
 ---
@@ -80,17 +89,35 @@ unsafe_repos(root) -> list[Path]
 Loads `~/.config/mac-care/config.toml` with fallback to hardcoded defaults. Returns a frozen `Config` dataclass. The only file that reads from disk at import time (via `Config.load()`).
 
 ### `report.py`
-Writes Markdown + JSON reports to `config.reports_dir`. Reports are timestamped and never overwritten. The Markdown groups findings by risk level with size totals.
+Writes Markdown + JSON + HTML reports to `config.reports_dir`. Reports are timestamped and never overwritten. The Markdown groups findings by risk level with size totals. Also writes `latest.html` (static dashboard) and `index.html` (history index). After writing, calls `rotate_reports()` to enforce `retention_days` / `retention_min_keep`.
 
-JSON report findings include a stable `id` derived from category, path, risk, source, and reason. Review approval actions must reference this ID rather than accepting arbitrary paths from user input.
+JSON report findings include a stable `id` derived from category, path, risk, and source. `reason` and `size_bytes` are excluded from the hash so IDs remain stable across runs when subdirectory sizes change.
+
+### `ids.py`
+Computes stable finding IDs: `SHA-256(category + "\0" + path + "\0" + risk + "\0" + source)[:16]`.
+
+### `safety.py`
+Shared `is_protected(path, config) -> bool` used by both `scan.py` and `clean.py`. Checks `config.protected_paths` and `config.quarantine_dir` (quarantined files are never re-quarantined).
 
 ### `review.py`
 Loads a known JSON report and approves one `review` finding by stable ID. The first command path is dry-run; execution delegates to the quarantine move path in `clean.py`.
 
 **Rule:** `protected` findings are rejected, and arbitrary filesystem paths are never accepted from the review command.
 
-### `scheduler.py` *(planned)*
-Will write/remove a launchd plist at `~/Library/LaunchAgents/com.mac-care.periodic.plist` that runs `mac-care scan` on a configurable interval. Must support `--dry-run` to print the plist without writing it.
+### `scheduler.py`
+Writes/removes a launchd plist at `~/Library/LaunchAgents/com.mac-care.periodic.plist`. Activates via `launchctl bootstrap gui/<uid>` with `launchctl load` as fallback. Supports `--dry-run` to print the plist without writing.
+
+### `privacy.py`
+Reads the macOS TCC database at `~/Library/Application Support/com.apple.TCC/TCC.db`. `check_fda()` verifies Full Disk Access before any read. Handles both modern (`auth_value`) and legacy (`allowed`) schema columns. Mac absolute time offset: `978307200`.
+
+### `uninstall.py`
+`discover_support_files(app_path)` uses Pearcleaner (`list-orphaned --app`) when installed, falling back to native `~/Library/` pattern matching. `app_deletion_hint()` uses `os.access(path, W_OK)` to choose between a trash hint and a `sudo rm -rf` warning.
+
+### `compare.py`
+`compare_reports(path1, path2) -> CompareSummary` diffs findings by stable ID. Returns new, resolved, and changed (size/reason delta) finding lists. Renders as Markdown or JSON.
+
+### `export.py`
+`export_obsidian(reports_dir, vault_path)` reads the most recent JSON report, formats a frontmatter block, and appends it to today's daily note (`vault/YYYY-MM-DD.md`). Deduplicates by `generated_at` — safe to run multiple times.
 
 ---
 
@@ -205,7 +232,7 @@ These must hold at all times. Tests should catch regressions.
 
 1. `scan()` never modifies or deletes files.
 2. `safe_clean()` only acts on `risk == "auto_safe"` findings.
-3. Protected paths are checked in both `scan.py` (`_is_protected`) and `clean.py` (git safety re-check).
+3. Protected paths are checked via `safety.is_protected()` in both `scan.py` and `clean.py`; `clean.py` also re-checks the git safety gate before acting.
 4. Git safety gate returns `True` (unsafe) on any subprocess failure — never silently clears a repo.
 5. Every `tools/` wrapper returns `[]` on any error — never propagates exceptions to the caller.
 6. `dry_run=True` is the default for `safe_clean()`. Callers must explicitly pass `dry_run=False` to act.
