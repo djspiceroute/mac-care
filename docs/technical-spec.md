@@ -34,6 +34,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Schedule interval config | `--interval <hours>` | Default 24h; uses launchd `StartInterval`; runs `mac-care scan --notify` only |
 | macOS scan notification | `mac-care scan --notify` | Posts compact scan summary through `osascript`; degrades gracefully |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
+| Quarantine cleanup execution | `mac-care clean --safe --execute` | Moves eligible `auto_safe` findings to quarantine with metadata; never `rm` |
 | Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
 | Report history index | `mac-care scan` | Writes read-only `index.html` listing previous JSON/Markdown/dashboard reports |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
@@ -49,7 +50,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 | Feature | Issue | Notes |
 |---|---|---|
-| Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | `mac-care clean --safe --execute` moves to `quarantine_dir`, never `rm` |
+| Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | Implemented for eligible item-level/rebuildable findings; broad containers remain skipped |
 | Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Interactive per-item confirmation for `review` findings |
 | Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Documented in `docs/dashboard-action-safety.md`; implementation remains future work |
 
@@ -122,7 +123,7 @@ Key categories protected by default:
 
 ## Known Constraints
 
-- **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path is a stub pending quarantine implementation (issue #12).
+- **Quarantine execution is intentionally narrow.** `mac-care clean --safe --execute` moves eligible `auto_safe` findings to quarantine, but broad container findings such as `user_caches`, `user_logs`, `trash`, and `tmp` are skipped until scan itemizes their contents.
 - **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. `tools/disk.py` uses `dua` as primary — `gdu` integration is deferred until resolved (possible fix: fingerprint binary via `--help` output before use).
 - **Pearcleaner live constraint.** Pearcleaner 5.4.3 installed successfully via Homebrew cask and linked `/opt/homebrew/bin/pearcleaner`. `pearcleaner --help` confirms `list-orphaned`, but the real `pearcleaner list-orphaned` call did not return within 60 seconds on this machine. The wrapper's timeout path returned `[]` as intended, so scans stay responsive and Pearcleaner findings remain optional/review-only.
 - **No scan output format flags yet.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is in progress (issue #6).
@@ -132,10 +133,11 @@ Key categories protected by default:
 
 ## Test Coverage
 
-95 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+100 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
+| `tests/test_clean.py` | Dry-run default, quarantine moves, metadata, protected-path re-check, non-itemized skip |
 | `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
 | `tests/test_history.py` | Report history loading, malformed report skipping, index rendering/writing |
 | `tests/test_notification.py` | Notification text and graceful `osascript` delivery behavior |

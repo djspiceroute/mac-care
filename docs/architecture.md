@@ -61,6 +61,8 @@ Acts on `auto_safe` findings only. Re-checks the git safety gate before touching
 
 **Rule:** Only `auto_safe` risk findings are eligible. `review` and `protected` are never touched.
 
+`--execute` moves eligible item-level/rebuildable findings to quarantine. Broad container findings such as `user_caches`, `user_logs`, `trash`, and `tmp` remain skipped until scan itemizes their contents. Every move writes metadata with the original path, quarantine path, risk, source, reason, and timestamp.
+
 ### `doctor.py`
 Checks required developer tools (`REQUIRED_TOOLS`), optional OSS integrations (`OSS_OPTIONAL_TOOLS`), Homebrew PATH, and Docker daemon reachability. `recommend_tools()` returns missing optional tools with install hints from `TOOL_RECOMMENDATIONS`.
 
@@ -200,4 +202,4 @@ These must hold at all times. Tests should catch regressions.
 4. Git safety gate returns `True` (unsafe) on any subprocess failure — never silently clears a repo.
 5. Every `tools/` wrapper returns `[]` on any error — never propagates exceptions to the caller.
 6. `dry_run=True` is the default for `safe_clean()`. Callers must explicitly pass `dry_run=False` to act.
-7. Deletion (when implemented) moves to `quarantine_dir`, never `rm`.
+7. Execution moves to `quarantine_dir`, never `rm`.

@@ -41,6 +41,7 @@ def main() -> int:
     clean_parser = subparsers.add_parser("clean", help="Run safe cleanup policy")
     clean_parser.add_argument("--safe", action="store_true", help="Only consider auto_safe findings")
     clean_parser.add_argument("--dry-run", action="store_true", default=True, help="Do not delete anything")
+    clean_parser.add_argument("--execute", action="store_true", help="Move eligible auto_safe findings to quarantine")
 
     schedule_parser = subparsers.add_parser("schedule", help="Manage periodic launchd scans")
     schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
@@ -109,10 +110,10 @@ def main() -> int:
         return 0
 
     if args.command == "clean":
-        actions = safe_clean(findings, dry_run=args.dry_run)
+        actions = safe_clean(findings, config=config, dry_run=not args.execute)
         for action in actions:
             print(action)
-        if args.dry_run:
+        if not args.execute:
             print("Dry run only. No files were deleted.")
         return 0
 

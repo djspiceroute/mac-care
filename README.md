@@ -94,7 +94,9 @@ App cleanup:
 
 Prints what would be cleaned from `auto_safe` findings. Does not delete anything.
 
-> `--execute` is planned but not yet active — see [roadmap](#roadmap).
+### `mac-care clean --safe --execute`
+
+Moves eligible `auto_safe` findings to the configured quarantine directory. This is intentionally narrower than scan output: broad containers such as `~/Library/Caches` and `/tmp` are skipped until scan itemizes their contents.
 
 ---
 
@@ -192,7 +194,7 @@ Tests never touch the real filesystem and never call real external tools — all
 | 🔜 | `mac-care schedule install/uninstall` — launchd plist for periodic automated scan |
 | 🔜 | `mac-care scan --stdout --format json` — pipe-friendly output |
 | 🔜 | `mac-care security` — KnockKnock (Objective-See) integration for login items, browser extensions |
-| 🗓 | `mac-care clean --safe --execute` — move files to quarantine dir instead of `rm` |
+| ✅ | `mac-care clean --safe --execute` — move eligible files to quarantine dir instead of `rm` |
 | 🗓 | Interactive review flow for `review`-class findings |
 | 🗓 | Report history and trending — compare consecutive scans |
 
