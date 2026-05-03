@@ -15,6 +15,7 @@ class Finding:
     size_bytes: int
     risk: Risk
     reason: str
+    source: str = "native"  # which tool produced this finding: native | brew | dua | docker | pearcleaner
 
 
 @dataclass(frozen=True)

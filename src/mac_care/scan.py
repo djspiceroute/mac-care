@@ -6,6 +6,7 @@ import time
 from .config import Config
 from .git_safety import unsafe_repos
 from .model import Finding, path_size
+from .tools.brew import brew_cleanup_findings
 
 
 def scan(config: Config) -> list[Finding]:
@@ -14,6 +15,7 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_developer_paths(config))
     findings.extend(_downloads_review(config))
     findings.extend(_codex_workspace_review(config))
+    findings.extend(brew_cleanup_findings())
     return [item for item in findings if item.size_bytes > 0 or item.risk == "review"]
 
 
@@ -34,7 +36,8 @@ def _developer_paths(config: Config) -> list[Finding]:
         ("xcode_derived_data", home / "Library/Developer/Xcode/DerivedData", "rebuildable Xcode artifacts"),
         ("xcode_archives", home / "Library/Developer/Xcode/Archives", "review archives before deleting"),
         ("android_gradle_cache", home / ".gradle/caches", "Gradle cache cleanup should be conservative"),
-        ("homebrew_cache", home / "Library/Caches/Homebrew", "Homebrew cache is rebuildable"),
+        # homebrew_cache removed: brew_cleanup_findings() in scan() provides
+        # richer, item-level findings directly from `brew cleanup --dry-run`
     ]
     findings: list[Finding] = []
     for category, path, reason in candidates:
