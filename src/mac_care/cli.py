@@ -16,7 +16,7 @@ from .notification import notify_scan_complete
 from .report import render_json, render_markdown, write_reports
 from .review import approve_finding
 from .scan import scan
-from .scheduler import install_schedule, uninstall_schedule
+from .scheduler import get_schedule_status, install_schedule, uninstall_schedule
 from .summary import summarize_scan
 
 
@@ -53,6 +53,7 @@ def main() -> int:
 
     schedule_parser = subparsers.add_parser("schedule", help="Manage periodic launchd scans")
     schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
+    schedule_subparsers.add_parser("status", help="Show current schedule status and pinned executable")
     install_parser = schedule_subparsers.add_parser("install", help="Install periodic scan launchd plist")
     install_parser.add_argument("--interval", type=int, default=24, help="Scan interval in hours")
     install_parser.add_argument("--dry-run", action="store_true", default=False, help="Print plist without writing files")
@@ -105,6 +106,10 @@ def main() -> int:
         return 0
 
     if args.command == "schedule":
+        if args.schedule_action == "status":
+            result = get_schedule_status()
+            print(result.message)
+            return 0
         if args.schedule_action == "install":
             result = install_schedule(config, interval_hours=args.interval, dry_run=args.dry_run)
             print(result.message)

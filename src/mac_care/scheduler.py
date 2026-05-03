@@ -21,10 +21,33 @@ class ScheduleResult:
 
 
 def default_program_arguments() -> list[str]:
+    """Resolve the absolute path to the mac-care executable or python -m mac_care."""
     executable = shutil.which("mac-care")
     if executable:
-        return [executable, "scan", "--notify"]
-    return [sys.executable, "-m", "mac_care.cli", "scan", "--notify"]
+        return [str(Path(executable).resolve()), "scan", "--notify"]
+
+    # Fallback to current python executable running the mac_care package
+    return [sys.executable, "-m", "mac_care", "scan", "--notify"]
+
+
+def get_schedule_status() -> ScheduleResult:
+    """Check the status of the periodic scan schedule."""
+    if not PLIST_PATH.exists():
+        return ScheduleResult(PLIST_PATH, f"No schedule installed at {PLIST_PATH}")
+
+    try:
+        payload = plistlib.loads(PLIST_PATH.read_bytes())
+        args = payload.get("ProgramArguments", [])
+        executable = args[0] if args else "unknown"
+        interval = payload.get("StartInterval", 0) // 3600
+        return ScheduleResult(
+            PLIST_PATH,
+            f"Schedule installed at {PLIST_PATH}\n"
+            f"  Executable: {executable}\n"
+            f"  Interval:   {interval}h"
+        )
+    except Exception as e:
+        return ScheduleResult(PLIST_PATH, f"Error reading schedule at {PLIST_PATH}: {e}")
 
 
 def build_plist(config: Config, interval_hours: int = 24, program_arguments: list[str] | None = None) -> dict:
