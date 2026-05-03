@@ -77,14 +77,35 @@ TOOL_RECOMMENDATIONS: dict[str, dict[str, str]] = {
 }
 
 
+# Common bin dirs that non-interactive shells (launchd, subprocess) often miss
+_EXTRA_BIN_DIRS = [
+    Path.home() / ".npm-global/bin",
+    Path.home() / ".local/bin",
+    Path.home() / ".cargo/bin",
+    Path("/usr/local/bin"),
+]
+
+
+def _find_tool(name: str) -> str | None:
+    """Like shutil.which but also searches _EXTRA_BIN_DIRS when not on PATH."""
+    found = which(name)
+    if found:
+        return found
+    for d in _EXTRA_BIN_DIRS:
+        candidate = d / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def _tool_installed(name: str) -> bool:
-    return which(name) is not None
+    return _find_tool(name) is not None
 
 
 def check_tools(include_optional: bool = True) -> list[ToolStatus]:
     statuses: list[ToolStatus] = []
     for name in REQUIRED_TOOLS:
-        found = which(name)
+        found = _find_tool(name)
         statuses.append(ToolStatus(name=name, status="ok" if found else "missing", detail=found or "not on PATH"))
 
     path = os.environ.get("PATH", "")
@@ -99,7 +120,7 @@ def check_tools(include_optional: bool = True) -> list[ToolStatus]:
 
     if include_optional:
         for name in OSS_OPTIONAL_TOOLS:
-            found = which(name)
+            found = _find_tool(name)
             statuses.append(ToolStatus(name=name, status="available" if found else "optional_missing", detail=found or "optional integration not installed"))
 
     return statuses
