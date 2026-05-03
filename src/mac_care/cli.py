@@ -9,6 +9,7 @@ from .actions import preview_restore_action, restore_action
 from .clean import safe_clean
 from .compare import compare_reports, load_report_from_json, render_compare_json, render_compare_markdown, render_what_changed_cli, what_changed
 from .config import Config
+from .dashboard.app import MacCareDashboard
 from .explain import explain_category, explain_finding
 from .export import export_obsidian
 from .history import load_history
@@ -39,6 +40,9 @@ def main() -> int:
         help="Output format when --stdout is used",
     )
     subparsers.add_parser("doctor", help="Check developer tool health")
+
+    dashboard_parser = subparsers.add_parser("dashboard", help="Interactive TUI dashboard for scan findings")
+    dashboard_parser.add_argument("--report", help="Path to a mac-care JSON report (defaults to latest)")
 
     tools_parser = subparsers.add_parser("tools", help="OSS tool status and recommendations")
     tools_parser.add_argument(
@@ -110,6 +114,27 @@ def main() -> int:
     if args.command == "doctor":
         for status in check_tools():
             print(f"{status.name}: {status.status} - {status.detail}")
+        return 0
+
+    if args.command == "dashboard":
+        report_path = Path(args.report) if args.report else None
+        if report_path is None:
+            history = load_history(config.reports_dir)
+            if history:
+                report_path = history[0].json_path
+        if not report_path or not report_path.exists():
+            print("Error: No report found. Run 'mac-care scan' first.", file=sys.stderr)
+            return 1
+        delta = None
+        try:
+            history = load_history(config.reports_dir)
+            if len(history) >= 2:
+                prev = load_report_from_json(history[1].json_path)
+                curr = load_report_from_json(report_path)
+                delta = what_changed(prev, curr)
+        except (OSError, KeyError, json.JSONDecodeError):
+            pass
+        MacCareDashboard(report_path, delta=delta).run()
         return 0
 
     if args.command == "tools":

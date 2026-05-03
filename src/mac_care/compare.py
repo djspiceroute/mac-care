@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from .ids import finding_id as _finding_id
 from .model import Finding, Report, ToolStatus, format_bytes
 
 
@@ -97,8 +98,8 @@ def compare_reports(path1: Path, path2: Path) -> CompareSummary:
 
 
 def what_changed(prev: Report, curr: Report) -> WhatChangedSummary:
-    prev_by_key: dict[tuple[str, str], Finding] = {(f.category, f.path): f for f in prev.findings}
-    curr_by_key: dict[tuple[str, str], Finding] = {(f.category, f.path): f for f in curr.findings}
+    prev_by_key: dict[str, Finding] = {_finding_id(f): f for f in prev.findings}
+    curr_by_key: dict[str, Finding] = {_finding_id(f): f for f in curr.findings}
 
     prev_keys = set(prev_by_key)
     curr_keys = set(curr_by_key)
