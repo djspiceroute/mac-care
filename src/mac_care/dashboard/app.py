@@ -8,6 +8,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Markdown, Static, Input
 from textual.binding import Binding
 
+from ..compare import WhatChangedSummary
 from ..model import format_bytes
 from ..explain import _explain_category
 
@@ -52,10 +53,23 @@ class FindingDetail(Markdown):
 
 class MacCareDashboard(App):
     """A Textual app for browsing mac-care findings."""
-    
+
     CSS = """
     Screen {
         background: $surface;
+    }
+
+    #what-changed-bar {
+        height: 1;
+        background: $boost;
+        color: $text-muted;
+        padding: 0 1;
+        dock: top;
+    }
+
+    #what-changed-bar.has-security {
+        background: $warning;
+        color: $text;
     }
 
     #main-container {
@@ -94,9 +108,10 @@ class MacCareDashboard(App):
         Binding("escape", "clear_filter", "Clear Filter", show=False),
     ]
 
-    def __init__(self, report_path: Path):
+    def __init__(self, report_path: Path, delta: WhatChangedSummary | None = None):
         super().__init__()
         self.report_path = report_path
+        self.delta = delta
         self.findings: list[dict] = []
         self.all_findings: list[dict] = []
 
@@ -143,6 +158,11 @@ class MacCareDashboard(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        if self.delta is not None:
+            bar = Static(_what_changed_bar_text(self.delta), id="what-changed-bar")
+            if self.delta.security_alerts:
+                bar.add_class("has-security")
+            yield bar
         yield Container(
             Vertical(
                 Horizontal(
@@ -183,3 +203,17 @@ class MacCareDashboard(App):
         # Toggle sort by size_bytes
         self.all_findings.sort(key=lambda x: x["size_bytes"], reverse=True)
         self.populate_table(self.query_one(Input).value)
+
+
+def _what_changed_bar_text(delta: WhatChangedSummary) -> str:
+    parts = [
+        f"{len(delta.new)} new",
+        f"{len(delta.resolved)} resolved",
+        f"{len(delta.grown)} grown",
+        f"{len(delta.shrunk)} shrunk",
+    ]
+    summary = "  |  ".join(parts)
+    if delta.security_alerts:
+        alerts = ", ".join(a.split(": ", 1)[-1] for a in delta.security_alerts)
+        summary += f"  [!] security: {alerts}"
+    return f"Changes since last scan  —  {summary}"
