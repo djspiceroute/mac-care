@@ -30,7 +30,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Compact scan summary | `mac-care scan` | Counts and sizes by risk, top findings, tool warning count |
 | Scan output flags | `mac-care scan --stdout` | Print JSON or Markdown to stdout for piping; skip writing files |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
-| Markdown + JSON reports | `mac-care scan` | Timestamped, written to `~/Documents/MacCare/reports/` |
+| Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
 | GitHub Actions CI | `.github/workflows/test.yml` | `macos-latest`, Python 3.11, 73 tests |
 | Branch protection | GitHub | Requires CI to pass before merge to main |
@@ -127,12 +127,12 @@ Key categories protected by default:
 
 ## Test Coverage
 
-79 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+80 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
 | `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
-| `tests/test_report.py` | Markdown rendering, risk grouping |
+| `tests/test_report.py` | Markdown/JSON/HTML rendering, risk grouping, read-only dashboard guard |
 | `tests/test_summary.py` | Risk totals, top findings, tool warning count |
 | `tests/test_git_safety.py` | `find_git_repos`, `is_dirty`, `has_active_worktrees`, `unsafe_repos` — all degradation paths |
 | `tests/test_doctor.py` | `recommend_tools` — missing/installed/empty/key/brew-prefix |
@@ -173,6 +173,8 @@ Pipe-friendly scan output skips file writing and emits a single report format:
 mac-care scan --stdout --format json
 mac-care scan --stdout --format markdown
 ```
+
+Default scan writes `latest.html` as a static local dashboard alongside timestamped Markdown and JSON reports. The HTML is read-only by design: it summarizes findings, risk groups, top findings, and doctor output, but does not include cleanup action controls.
 
 | Source | Category examples | Risk |
 |---|---|---|

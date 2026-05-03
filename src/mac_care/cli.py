@@ -66,7 +66,7 @@ def main() -> int:
                 print(render_markdown(findings, tools))
             return 0
 
-        md_path, json_path = write_reports(config, findings, tools)
+        md_path, json_path, html_path = write_reports(config, findings, tools)
         summary = summarize_scan(findings, tools)
         total = sum(item.size_bytes for item in findings)
         review = summary.risks["review"]
@@ -80,6 +80,7 @@ def main() -> int:
         )
         print(f"Markdown report: {md_path}")
         print(f"JSON report: {json_path}")
+        print(f"HTML report: {html_path}")
         return 0
 
     if args.command == "clean":

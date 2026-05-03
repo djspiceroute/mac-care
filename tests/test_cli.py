@@ -36,7 +36,7 @@ def test_scan_default_writes_reports(monkeypatch, capsys):
     monkeypatch.setattr(cli.Config, "load", lambda _: object())
     monkeypatch.setattr(cli, "scan", lambda _: [Finding("logs", "/tmp/logs", 100, "auto_safe", "old logs")])
     monkeypatch.setattr(cli, "check_tools", lambda: [ToolStatus("git", "ok", "/usr/bin/git")])
-    monkeypatch.setattr(cli, "write_reports", lambda *_: ("/tmp/report.md", "/tmp/report.json"))
+    monkeypatch.setattr(cli, "write_reports", lambda *_: ("/tmp/report.md", "/tmp/report.json", "/tmp/latest.html"))
     monkeypatch.setattr("sys.argv", ["mac-care", "scan"])
 
     assert cli.main() == 0
@@ -44,3 +44,4 @@ def test_scan_default_writes_reports(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Scanned 1 findings" in output
     assert "Markdown report: /tmp/report.md" in output
+    assert "HTML report: /tmp/latest.html" in output
