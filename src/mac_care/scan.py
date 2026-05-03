@@ -8,6 +8,7 @@ from .git_safety import unsafe_repos
 from .model import Finding, path_size
 from .tools.brew import brew_cleanup_findings
 from .tools.disk import size_of, top_subdirs_summary
+from .tools.docker_check import docker_findings
 
 # Directories larger than this get a top-subdirs breakdown appended to reason.
 _BREAKDOWN_THRESHOLD_BYTES = 500 * 1024 * 1024  # 500 MB
@@ -20,6 +21,7 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_downloads_review(config))
     findings.extend(_codex_workspace_review(config))
     findings.extend(brew_cleanup_findings())
+    findings.extend(docker_findings())
     return [item for item in findings if item.size_bytes > 0 or item.risk == "review"]
 
 
