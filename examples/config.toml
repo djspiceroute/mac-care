@@ -15,6 +15,12 @@ quarantine_dir = "~/.mac-care/quarantine"
 # Old installers (.dmg / .pkg / .zip) in ~/Downloads older than this are surfaced as review findings.
 min_age_days = 14
 
+# Report rotation: delete old reports to keep the reports directory tidy.
+# Reports are sorted newest-first; the newest retention_min_keep are always kept,
+# then any older than retention_days are deleted.
+retention_days = 30
+retention_min_keep = 10
+
 # Paths that are never auto-cleaned, regardless of risk level.
 # When set, this replaces the default list entirely — include any defaults you want to keep.
 # Any directory containing an active or dirty git repo is also protected at runtime.

@@ -5,7 +5,11 @@ from pathlib import Path
 import sys
 
 from .clean import safe_clean
+from .compare import compare_reports, render_compare_json, render_compare_markdown
 from .config import Config
+from .export import export_obsidian
+from .privacy import TCC_DB, audit_privacy, check_fda, render_privacy_text
+from .uninstall import UninstallResult, app_deletion_hint, discover_support_files, find_app, quarantine_finding, render_uninstall_report
 from .doctor import check_tools, recommend_tools
 from .model import format_bytes
 from .notification import notify_scan_complete
@@ -54,6 +58,27 @@ def main() -> int:
     uninstall_parser = schedule_subparsers.add_parser("uninstall", help="Uninstall periodic scan launchd plist")
     uninstall_parser.add_argument("--dry-run", action="store_true", default=False, help="Print planned removal without changing files")
 
+    uninstall_parser = subparsers.add_parser("uninstall", help="Find and quarantine support files for a deleted/unwanted app")
+    uninstall_parser.add_argument("app_name", help="App name (e.g. Zoom, Slack)")
+    uninstall_parser.add_argument("--dry-run", action="store_true", default=True, help="Show what would be quarantined (default)")
+    uninstall_parser.add_argument("--execute", action="store_true", help="Quarantine discovered support files")
+
+    audit_parser = subparsers.add_parser("audit", help="Security and privacy audits")
+    audit_subparsers = audit_parser.add_subparsers(dest="audit_action", required=True)
+    audit_subparsers.add_parser("privacy", help="List macOS TCC permissions granted to apps")
+
+    export_parser = subparsers.add_parser("export", help="Export scan results to external formats")
+    export_parser.add_argument("--format", choices=["obsidian"], required=True, help="Export format")
+    export_parser.add_argument("--vault-path", help="Obsidian vault path (overrides config)")
+
+    compare_parser = subparsers.add_parser("compare", help="Diff two scan JSON reports")
+    compare_parser.add_argument("report1", help="Path to first (older) JSON report")
+    compare_parser.add_argument("report2", help="Path to second (newer) JSON report")
+    compare_parser.add_argument(
+        "--format", choices=["markdown", "json"], default="markdown",
+        help="Output format (default: markdown)",
+    )
+
     review_parser = subparsers.add_parser("review", help="Approve review-risk findings from a report")
     review_subparsers = review_parser.add_subparsers(dest="review_action", required=True)
     approve_parser = review_subparsers.add_parser("approve", help="Approve one review-risk finding by ID")
@@ -87,6 +112,56 @@ def main() -> int:
             result = uninstall_schedule(dry_run=args.dry_run)
             print(result.message)
             return 0
+
+    if args.command == "uninstall":
+        app_path = find_app(args.app_name)
+        support_files = discover_support_files(app_path) if app_path else []
+        hint = app_deletion_hint(app_path) if app_path else ""
+        result = UninstallResult(app_path=app_path, support_files=support_files, app_hint=hint)
+        print(render_uninstall_report(result))
+        if args.execute and support_files:
+            print()
+            run_id = None
+            for finding in support_files:
+                msg = quarantine_finding(finding, config, run_id=run_id)
+                print(msg)
+        elif not args.execute and support_files:
+            print("\nDry run only. Run with --execute to quarantine support files.")
+        return 0
+
+    if args.command == "audit" and args.audit_action == "privacy":
+        if not check_fda():
+            print(
+                "Error: mac-care cannot read the TCC database.\n"
+                "Grant Full Disk Access in:\n"
+                "  System Settings → Privacy & Security → Full Disk Access\n"
+                f"TCC database path: {TCC_DB}",
+                file=sys.stderr,
+            )
+            return 1
+        entries = audit_privacy()
+        print(render_privacy_text(entries))
+        return 0
+
+    if args.command == "export":
+        vault = Path(args.vault_path).expanduser() if args.vault_path else config.obsidian_vault_path
+        if vault is None:
+            print("Error: --vault-path is required (or set obsidian_vault_path in config.toml)", file=sys.stderr)
+            return 1
+        try:
+            print(export_obsidian(config.reports_dir, vault))
+        except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "compare":
+        summary = compare_reports(Path(args.report1), Path(args.report2))
+        if args.format == "json":
+            print(render_compare_json(summary))
+        else:
+            print(render_compare_markdown(summary, Path(args.report1), Path(args.report2)))
+        return 0
 
     if args.command == "review":
         if args.review_action == "approve":

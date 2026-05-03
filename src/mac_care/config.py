@@ -24,6 +24,9 @@ class Config:
     additional_scan_paths: list[Path] = field(default_factory=list)
     # Per-category overrides: {category: {min_age_days: int, ...}}
     category_policy: dict[str, dict] = field(default_factory=dict)
+    retention_days: int = 30
+    retention_min_keep: int = 10
+    obsidian_vault_path: Path | None = None
 
     def min_age_days_for(self, category: str) -> int:
         """Return the effective min_age_days for a given category."""
@@ -59,6 +62,9 @@ class Config:
             protected_paths=[Path(os.path.expanduser(item)) for item in protected],
             additional_scan_paths=[Path(os.path.expanduser(item)) for item in additional],
             category_policy=category_policy,
+            retention_days=int(policy.get("retention_days", 30)),
+            retention_min_keep=int(policy.get("retention_min_keep", 10)),
+            obsidian_vault_path=Path(os.path.expanduser(policy["obsidian_vault_path"])) if "obsidian_vault_path" in policy else None,
         )
 
     def ensure_dirs(self) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from html import escape
 import json
+import time
 
 from .config import Config
 from .history import write_history_index
@@ -36,7 +37,46 @@ def write_reports(config: Config, findings: list[Finding], tools: list[ToolStatu
     md_path.write_text(render_markdown(findings, tools), encoding="utf-8")
     html_path.write_text(render_html(findings, tools), encoding="utf-8")
     write_history_index(config.reports_dir)
+    rotated = rotate_reports(config)
+    if rotated:
+        print(f"Rotated {rotated} old report(s).")
     return str(md_path), str(json_path), str(html_path)
+
+
+def rotate_reports(config: Config) -> int:
+    """Delete old timestamped reports, keeping at least retention_min_keep regardless of age.
+
+    Returns the number of files deleted.
+    """
+    reports_dir = config.reports_dir
+    if not reports_dir.exists():
+        return 0
+
+    # Only rotate timestamped report files, never latest.html or index.html
+    rotatable_suffixes = {".json", ".md", ".html"}
+    permanent = {"latest.html", "index.html"}
+
+    candidates = sorted(
+        [
+            f for f in reports_dir.iterdir()
+            if f.is_file()
+            and f.suffix in rotatable_suffixes
+            and f.name not in permanent
+        ],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,  # newest first
+    )
+
+    # Keep the first retention_min_keep unconditionally
+    to_consider = candidates[config.retention_min_keep:]
+    cutoff = time.time() - (config.retention_days * 86400)
+
+    deleted = 0
+    for f in to_consider:
+        if f.stat().st_mtime < cutoff:
+            f.unlink()
+            deleted += 1
+    return deleted
 
 
 def render_markdown(findings: list[Finding], tools: list[ToolStatus]) -> str:
