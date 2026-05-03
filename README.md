@@ -1,72 +1,204 @@
 # mac-care
 
-Local macOS maintenance for a developer machine.
+Local macOS maintenance for a developer machine. A free, self-hosted replacement for the practical parts of CleanMyMac — report-first, no surprise deletions, OSS tools as backends.
 
-`mac-care` is not a CleanMyMac clone. It is a small local coordinator that:
+[![Tests](https://github.com/djspiceroute/mac-care/actions/workflows/test.yml/badge.svg)](https://github.com/djspiceroute/mac-care/actions/workflows/test.yml)
 
-- scans cleanup opportunities
-- checks developer tool health
-- generates Markdown and JSON reports
-- separates safe cleanup from review-only cleanup
-- leaves room to integrate good free/open-source utilities instead of rebuilding everything
+---
 
-The first version is report-first. Deletion is dry-run by default.
+## What it does
+
+`mac-care` is a coordinator, not a scanner. It calls trusted OSS tools, collects their output into a unified `Finding` model, and generates Markdown + JSON reports. You decide what to act on.
+
+- **Scans** cleanup opportunities from Homebrew, Docker, disk usage, Xcode, caches, old installers, and orphaned app files
+- **Guards** active git repos and worktrees from being touched before any cleanup
+- **Checks** developer tool health (required tools, optional OSS integrations, Docker daemon)
+- **Recommends** OSS tools to install with exact brew commands
+- **Reports** findings grouped by risk level — `auto_safe`, `review`, `protected`
+- **Cleans** only `auto_safe` findings, dry-run by default, quarantine dir instead of `rm`
+
+---
+
+## Quick start
+
+```bash
+cd ~/Developer/mac-care
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+mac-care scan
+```
+
+---
 
 ## Commands
 
-```bash
-mac-care scan
-mac-care doctor
-mac-care clean --safe --dry-run
-mac-care tools
+### `mac-care scan`
+Runs all scanners, writes a Markdown + JSON report to `~/Documents/MacCare/reports/`.
+
+```
+Scanned 97 findings, 25.4 GB observed.
+Markdown report: ~/Documents/MacCare/reports/mac-care-2026-05-02-210826.md
+JSON report:     ~/Documents/MacCare/reports/mac-care-2026-05-02-210826.json
 ```
 
-## Policy
+### `mac-care doctor`
+Checks required developer tools and environment health.
 
-Auto-clean candidates are intentionally conservative:
+```
+brew: ok - /opt/homebrew/bin/brew
+git: ok - /usr/bin/git
+docker_daemon: ok - daemon is reachable
+homebrew_path: ok - /opt/homebrew/bin is on PATH
+pnpm: missing - not on PATH
+```
 
-- old user logs
-- old cache files
-- old temp files
-- Homebrew cache
-- Xcode DerivedData
+### `mac-care tools status`
+Shows all required + optional tools with installed/missing status.
 
-Review-only candidates include:
+### `mac-care tools recommend`
+Lists missing optional OSS tools grouped by function, with install commands.
 
-- old Codex workspaces
-- git worktrees
-- app leftovers
-- Docker volumes
-- browser data
-- LaunchAgents and background items
+```
+Disk analysis:
+  dust    Rust-based directory size tree  →  brew install dust
+  ncdu    Classic ncurses disk usage      →  brew install ncdu
 
-Protected by default:
+App cleanup:
+  pearcleaner  Orphaned app support files  →  brew install --cask pearcleaner
+```
 
-- `~/.codex`
-- `~/.agents`
-- `~/multica`
-- `~/multica_workspaces`
-- active or dirty git repositories
-- VS Code extensions
-- browser extensions
+### `mac-care clean --safe --dry-run`
+Prints what would be cleaned from `auto_safe` findings. Does not delete anything without `--execute` (not yet implemented — see roadmap).
 
-## Open-Source Utility Strategy
+---
 
-`mac-care` should wrap and coordinate existing tools when they are good:
+## Risk levels
 
-- `gdu`, `ncdu`, `dust`, or `dua` for disk usage inspection
-- Homebrew for package cache and update checks
-- Docker/OrbStack CLI for container cleanup reporting
-- Objective-See tools for security and persistence visibility
-- Mole, ClearDisk, Pearcleaner, or similar tools after scan-only evaluation
+| Level | Meaning | Example |
+|---|---|---|
+| `auto_safe` | Rebuildable or explicitly safe per the source tool | Homebrew cache items (`brew cleanup --dry-run`), Xcode DerivedData |
+| `review` | Needs human confirmation before deletion | Docker volumes, old installers, Codex workspaces, orphaned app files |
+| `protected` | Never touched automatically | Active/dirty git repos, `~/.codex`, `~/.agents`, VS Code extensions |
 
-The custom value is the policy layer: scheduling, reports, protected paths, review gates, and machine-specific rules.
+---
+
+## OSS integrations
+
+Each integration is in `src/mac_care/tools/` and degrades gracefully — if the tool is not installed, it returns an empty list and the scan continues.
+
+| Module | Tool | What it surfaces |
+|---|---|---|
+| `tools/brew.py` | `brew cleanup --dry-run` | Per-item Homebrew cache reclaimable, `auto_safe` |
+| `tools/disk.py` | `dua` (primary) / `du` (fallback) | Fast directory sizes; top-subdir breakdown for dirs >500 MB |
+| `tools/docker_check.py` | `docker system df` | Reclaimable per category: images, containers, volumes, build cache |
+| `tools/pearcleaner.py` | `pearcleaner list-orphaned` | App support files orphaned after app deletion |
+
+Finding sources are tagged in the `source` field: `native`, `brew`, `dua`, `docker`, `pearcleaner`.
+
+### Install recommended tools
+
+```bash
+brew install dua-cli        # fast disk analysis (primary backend)
+brew install dust           # alternative disk tree
+brew install --cask pearcleaner  # orphaned app file scanner
+```
+
+---
+
+## Protected paths (defaults)
+
+```
+~/.codex
+~/.agents
+~/multica
+~/multica_workspaces
+~/.vscode/extensions
+~/Library/Application Support/Google/Chrome/NativeMessagingHosts
+~/Library/Application Support/Mozilla/NativeMessagingHosts
+active or dirty git repositories and worktrees
+```
+
+Override in `~/.config/mac-care/config.toml` — see `examples/config.toml`.
+
+---
+
+## Configuration
+
+Config file: `~/.config/mac-care/config.toml` (optional — defaults work out of the box).
+
+```toml
+[policy]
+reports_dir    = "~/Documents/MacCare/reports"
+quarantine_dir = "~/Documents/MacCare/quarantine"
+min_age_days   = 14
+
+protected_paths = [
+  "~/.codex",
+  "~/.agents",
+  "~/multica",
+]
+```
+
+---
 
 ## Development
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+python -m pytest tests/ -v
+
+# Run a live scan
 mac-care scan
 ```
+
+### Project layout
+
+```
+src/mac_care/
+  cli.py            Command routing
+  scan.py           Orchestrates all scanners → list[Finding]
+  doctor.py         Developer tool health checks + recommendations
+  clean.py          Safe cleanup with git safety re-check
+  report.py         Markdown + JSON report writer
+  model.py          Finding, ToolStatus, format_bytes, path_size
+  config.py         Config loader (TOML + defaults)
+  git_safety.py     find_git_repos, is_dirty, unsafe_repos
+  scheduler.py      (planned) launchd install/uninstall
+  tools/
+    brew.py         brew cleanup --dry-run integration
+    disk.py         dua / du disk tree integration
+    docker_check.py docker system df integration
+    pearcleaner.py  pearcleaner list-orphaned integration
+
+tests/
+  test_report.py
+  test_git_safety.py
+  test_doctor.py
+  tools/
+    test_brew.py
+    test_disk.py
+    test_docker.py
+    test_pearcleaner.py
+```
+
+---
+
+## Roadmap
+
+See `docs/technical-spec.md` for full feature status and next priorities.
+
+**Next sprint:**
+- `mac-care schedule install` / `schedule uninstall` — launchd plist for periodic scan
+- Live test of Pearcleaner once installed (`brew install --cask pearcleaner`)
+- `mac-care scan --stdout --format json` — pipe-friendly output without writing files
+- KnockKnock security persistence scan (Objective-See) as a separate `mac-care security` command
+
+---
+
+## Agent instructions
+
+See `AGENTS.md` for branch naming, git workflow, commit conventions, testing rules, safety constraints, and escalation policy.
