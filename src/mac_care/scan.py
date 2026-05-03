@@ -7,6 +7,10 @@ from .config import Config
 from .git_safety import unsafe_repos
 from .model import Finding, path_size
 from .tools.brew import brew_cleanup_findings
+from .tools.disk import size_of, top_subdirs_summary
+
+# Directories larger than this get a top-subdirs breakdown appended to reason.
+_BREAKDOWN_THRESHOLD_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
 def scan(config: Config) -> list[Finding]:
@@ -76,14 +80,29 @@ def _codex_workspace_review(config: Config) -> list[Finding]:
         reason = "old agent workspaces can be large; active work must be checked before deletion"
         risk = "review"
 
-    return [Finding("codex_workspaces", str(codex_docs), path_size(codex_docs), risk, reason)]  # type: ignore[arg-type]
+    total = size_of(codex_docs)
+    if total >= _BREAKDOWN_THRESHOLD_BYTES and risk != "protected":
+        summary = top_subdirs_summary(codex_docs)
+        if summary:
+            reason = f"{reason}; {summary}"
+
+    return [Finding("codex_workspaces", str(codex_docs), total, risk, reason)]  # type: ignore[arg-type]
 
 
 def _finding(category: str, path: Path, risk: str, reason: str, config: Config) -> Finding:
     resolved = path.expanduser()
     if _is_protected(resolved, config):
         risk = "protected"
-    return Finding(category, str(resolved), path_size(resolved), risk, reason)  # type: ignore[arg-type]
+
+    total = size_of(resolved)
+
+    # Enrich reason with top-subdirs breakdown for large directories
+    if total >= _BREAKDOWN_THRESHOLD_BYTES and risk != "protected":
+        summary = top_subdirs_summary(resolved)
+        if summary:
+            reason = f"{reason}; {summary}"
+
+    return Finding(category, str(resolved), total, risk, reason)  # type: ignore[arg-type]
 
 
 def _is_protected(path: Path, config: Config) -> bool:
