@@ -98,3 +98,17 @@ def test_review_approve_dry_run(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "would quarantine review finding abc" in output
     assert "Dry run only" in output
+
+
+def test_clean_purge_abort(monkeypatch, capsys):
+    monkeypatch.setattr(cli.Config, "load", lambda _: object())
+    monkeypatch.setattr(cli, "scan", lambda _: [Finding("logs", "/tmp/logs", 100, "auto_safe", "old logs")])
+    monkeypatch.setattr(cli, "check_tools", lambda: [])
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    monkeypatch.setattr("sys.argv", ["mac-care", "clean", "--safe", "--purge"])
+
+    assert cli.main() == 0
+
+    output = capsys.readouterr().out
+    assert "About to permanently delete 1 auto_safe findings" in output
+    assert "Aborted." in output

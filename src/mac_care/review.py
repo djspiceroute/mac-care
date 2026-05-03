@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .clean import quarantine_finding
+from .actions import preview_quarantine_action, quarantine_action
 from .config import Config
 from .ids import finding_id
 from .model import Finding
@@ -20,9 +20,12 @@ def approve_finding(report_path: Path, finding_id_value: str, config: Config, dr
         return f"skipped review approval for {finding_id_value}: finding risk is {finding.risk}, not review"
 
     if dry_run:
-        return f"would quarantine review finding {finding_id_value}: {finding.path}"
+        result = preview_quarantine_action(finding, config)
+        if result.status == "would_quarantine":
+            return f"would quarantine review finding {finding_id_value}: {finding.path}"
+        return result.render()
 
-    return quarantine_finding(finding, config)
+    return quarantine_action(finding, config).render()
 
 
 def _finding_from_report(report_path: Path, finding_id_value: str) -> Finding | None:
