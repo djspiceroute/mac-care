@@ -38,18 +38,30 @@ Do not auto-delete these unless the user explicitly changes config:
 
 ## Architecture
 
-- `src/mac_care/cli.py`: command routing
+- `src/mac_care/cli.py`: command routing (10 commands)
 - `src/mac_care/scan.py`: scan-only cleanup findings
-- `src/mac_care/doctor.py`: developer tool and environment checks
+- `src/mac_care/doctor.py`: developer tool health checks (tools, SSH keys, redundant toolchains)
 - `src/mac_care/clean.py`: safe cleanup orchestration
-- `src/mac_care/report.py`: Markdown and JSON reports
+- `src/mac_care/report.py`: Markdown + JSON + HTML report writer; report rotation
+- `src/mac_care/model.py`: Finding, ToolStatus, format_bytes, path_size
+- `src/mac_care/config.py`: Config loader (TOML + defaults); per-category policy
 - `src/mac_care/git_safety.py`: git repo / worktree safety gate
-- `src/mac_care/scheduler.py`: launchd schedule install/uninstall
+- `src/mac_care/safety.py`: `is_protected()` — shared by scan.py and clean.py
+- `src/mac_care/ids.py`: stable finding ID (SHA-256 of category+path+risk+source)
+- `src/mac_care/summary.py`: ScanSummary — risk totals, top findings, tool warnings
+- `src/mac_care/review.py`: approve one `review` finding by stable ID
+- `src/mac_care/scheduler.py`: launchd plist install/uninstall with bootstrap activation
+- `src/mac_care/notification.py`: macOS notification via osascript
+- `src/mac_care/history.py`: report history index.html writer
+- `src/mac_care/privacy.py`: TCC database audit
+- `src/mac_care/uninstall.py`: app support file discovery and quarantine
+- `src/mac_care/compare.py`: diff two JSON reports
+- `src/mac_care/export.py`: Obsidian daily note export
 - `src/mac_care/tools/`: wrappers for external OSS utilities
   - `brew.py`: Homebrew cleanup findings
-  - `disk.py`: dua/dust disk tree integration
+  - `disk.py`: dua/du disk tree integration
   - `docker_check.py`: Docker disk usage findings
-  - `pearcleaner.py`: orphaned app support file findings
+  - `pearcleaner.py`: orphaned app support file findings (used by uninstall command)
 
 ## Open-Source Utility Strategy
 
