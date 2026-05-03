@@ -153,6 +153,8 @@ CLI source verified from [alienator88/Pearcleaner — Logic/CLI.swift](https://g
 
 All findings are `review` risk — never auto-cleaned.
 
+Live validation note: Pearcleaner 5.4.3 installed via Homebrew cask and `pearcleaner --help` confirms the `list-orphaned` subcommand. On this machine, `pearcleaner list-orphaned` did not return within 60 seconds, so the wrapper timeout is part of the safety contract and should remain fail-closed to `[]`.
+
 ---
 
 ## Report Structure

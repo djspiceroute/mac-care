@@ -72,7 +72,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 
 | Feature | Issue | Notes |
 |---|---|---|
-| Pearcleaner live test | [#7](https://github.com/djspiceroute/mac-care/issues/7) | Install and run real scan; integration is mock-tested only today |
+| Pearcleaner live test | [#7](https://github.com/djspiceroute/mac-care/issues/7) | Installed cask and verified CLI; `list-orphaned` timed out live |
 
 ---
 
@@ -101,7 +101,7 @@ All are optional — mac-care degrades gracefully when absent.
 | `dust` | `brew install dust` | `tools/disk.py` (planned secondary) | Rust-based directory size tree |
 | `gdu` | `brew install gdu` | Not integrated | Name collision with GNU `du` on machines with `coreutils` installed |
 | `ncdu` | `brew install ncdu` | Not integrated | Interactive ncurses disk usage |
-| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | Pending live test (#7) |
+| `pearcleaner` | `brew install --cask pearcleaner` | `tools/pearcleaner.py` | CLI verified; `list-orphaned` timed out live |
 | `mas` | `brew install mas` | Not yet integrated | Mac App Store CLI |
 | KnockKnock | Manual download (Objective-See) | Planned `mac-care security` | Security persistence scanner |
 
@@ -123,7 +123,7 @@ Key categories protected by default:
 
 - **No deletion implemented yet.** `mac-care clean --safe` only operates in dry-run mode. The `--execute` path is a stub pending quarantine implementation (issue #12).
 - **`gdu` name collision.** `brew install coreutils` puts a `gdu` binary on PATH that is GNU `du`, not the Go disk usage analyzer. `tools/disk.py` uses `dua` as primary — `gdu` integration is deferred until resolved (possible fix: fingerprint binary via `--help` output before use).
-- **Pearcleaner not yet live-tested.** `tools/pearcleaner.py` is complete and tested with mocks. Live test pending issue #7.
+- **Pearcleaner live constraint.** Pearcleaner 5.4.3 installed successfully via Homebrew cask and linked `/opt/homebrew/bin/pearcleaner`. `pearcleaner --help` confirms `list-orphaned`, but the real `pearcleaner list-orphaned` call did not return within 60 seconds on this machine. The wrapper's timeout path returned `[]` as intended, so scans stay responsive and Pearcleaner findings remain optional/review-only.
 - **No scan output format flags yet.** `mac-care scan` always writes both files. `--stdout --format json/markdown` is in progress (issue #6).
 - **Interactive notification actions are not implemented.** Notifications summarize the scan only; review still happens in reports.
 
@@ -216,5 +216,6 @@ Scheduled scans use `mac-care scan --notify`, which writes reports and posts a c
 | 2026-05-02 | `gdu` integration deferred | Name collision with GNU du — needs binary fingerprinting before use |
 | 2026-05-02 | Docker findings all `review` | Docker cleanup is stateful and non-trivial; always require user intent |
 | 2026-05-02 | Pearcleaner all `review` | Orphaned file determination is heuristic; human confirmation is necessary |
+| 2026-05-02 | Keep Pearcleaner timeout degradation | Live `list-orphaned` can hang; wrapper should return `[]` rather than block scan |
 | 2026-05-02 | Quarantine dir instead of `rm` | One-way door prevention; files can be recovered from quarantine |
 | 2026-05-02 | Repo made public | Enables GitHub Actions CI and branch protection on free tier |
