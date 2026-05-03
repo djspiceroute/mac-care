@@ -81,6 +81,11 @@ Moves eligible `auto_safe` findings to quarantine.
 ### `mac-care review approve`
 Approves one `review` finding from a JSON report by its stable ID.
 
+### `mac-care quarantine restore <identifier>`
+Restores a quarantined item by stable finding ID, metadata path, original path, or quarantine path.
+- Dry-run by default; use `--execute` to move the item back.
+- Refuses to overwrite an existing destination.
+
 ### `mac-care uninstall <AppName>`
 Finds an app bundle and its support files. Provides guidance for removal or automates quarantine.
 
@@ -103,13 +108,13 @@ Diffs two JSON reports to show new, resolved, or changed findings.
 | ✅ | **Privacy Audit** — TCC database permission viewer |
 | ✅ | **Report Compare** — Diffing two scan results |
 | ✅ | **Report Rotation** — Automated cleanup of old reports |
+| ✅ | **Action Service Layer** — Reusable engine for CLI and Dashboard (#61) |
+| ✅ | **Quarantine Restore** — Boringly reversible "Undo" for cleanup (#62) |
 | 🗓 | **Quarantine Management** — status, purge, and auto-rotation (#44, #45) |
 | 🗓 | **Security Audit** — Persistence visibility for LaunchAgents/Daemons (#54) |
 | 🗓 | **Xcode Dev Cleanup** — Simulator and device support cleanup (#53) |
 | 🗓 | **Large File Finder** — Global scanner with protected-path exclusions (#51) |
 | 🗓 | **Interactive Dashboard** — Terminal-based (TUI) management console (#64) |
-| 🗓 | **Action Service Layer** — Reusable engine for CLI and Dashboard (#61) |
-| 🗓 | **Quarantine Restore** — Boringly reversible "Undo" for cleanup (#62) |
 
 ---
 

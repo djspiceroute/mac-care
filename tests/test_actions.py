@@ -1,5 +1,15 @@
-from mac_care.actions import preview_clean_action, preview_quarantine_action, purge_action, quarantine_action
+from pathlib import Path
+
+from mac_care.actions import (
+    preview_clean_action,
+    preview_quarantine_action,
+    preview_restore_action,
+    purge_action,
+    quarantine_action,
+    restore_action,
+)
 from mac_care.config import Config
+from mac_care.ids import finding_id
 from mac_care.model import Finding
 
 
@@ -98,3 +108,73 @@ def test_purge_action_skips_non_itemized_auto_safe_category(tmp_path):
     assert result.render() == "skipped purge for user_caches: category is not itemized for permanent deletion yet"
     assert target.exists()
     assert (target / "cache-file").exists()
+
+
+def test_preview_restore_action_finds_quarantine_by_finding_id(tmp_path):
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+    finding = Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")
+    quarantine_action(finding, config, run_id="run-1")
+
+    result = preview_restore_action(config, finding_id(finding))
+
+    assert result.status == "would_restore"
+    assert result.destination == str(target)
+    assert target.exists() is False
+    assert (config.quarantine_dir / "run-1" / "brew_cache" / "cache-item").exists()
+
+
+def test_restore_action_moves_quarantined_item_back_to_original_path(tmp_path):
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+    finding = Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")
+    quarantined = quarantine_action(finding, config, run_id="run-1")
+
+    result = restore_action(config, quarantined.destination or "")
+
+    assert result.status == "restored"
+    assert result.destination == str(target)
+    assert result.render() == f"restored {quarantined.destination} -> {target}"
+    assert target.read_text(encoding="utf-8") == "cache"
+    assert not (config.quarantine_dir / "run-1" / "brew_cache" / "cache-item").exists()
+
+
+def test_restore_action_skips_when_destination_exists(tmp_path):
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+    finding = Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")
+    quarantined = quarantine_action(finding, config, run_id="run-1")
+    target.write_text("new file", encoding="utf-8")
+
+    result = restore_action(config, quarantined.destination or "")
+
+    assert result.status == "skipped"
+    assert result.render() == f"skipped restore: destination already exists {target}"
+    assert target.read_text(encoding="utf-8") == "new file"
+    assert (config.quarantine_dir / "run-1" / "brew_cache" / "cache-item").exists()
+
+
+def test_restore_action_skips_unknown_identifier(tmp_path):
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+
+    result = restore_action(config, "missing")
+
+    assert result.status == "skipped"
+    assert result.render() == "skipped restore: no quarantine metadata found for missing"
+
+
+def test_restore_action_skips_when_quarantined_item_missing(tmp_path):
+    target = tmp_path / "cache-item"
+    target.write_text("cache", encoding="utf-8")
+    config = Config(reports_dir=tmp_path / "reports", quarantine_dir=tmp_path / "quarantine")
+    finding = Finding("brew_cache", str(target), 5, "auto_safe", "brew cleanup", "brew")
+    quarantined = quarantine_action(finding, config, run_id="run-1")
+    Path(quarantined.destination or "").unlink()
+
+    result = restore_action(config, finding_id(finding))
+
+    assert result.status == "skipped"
+    assert result.render() == f"skipped restore: quarantined item no longer exists {quarantined.destination}"
