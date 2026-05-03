@@ -4,7 +4,15 @@ from pathlib import Path
 import time
 
 from .config import Config
+from .git_safety import unsafe_repos
 from .model import Finding, path_size
+from .tools.brew import brew_cleanup_findings
+from .tools.disk import size_of, top_subdirs_summary
+from .tools.docker_check import docker_findings
+from .tools.pearcleaner import pearcleaner_findings
+
+# Directories larger than this get a top-subdirs breakdown appended to reason.
+_BREAKDOWN_THRESHOLD_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
 def scan(config: Config) -> list[Finding]:
@@ -13,6 +21,9 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(_developer_paths(config))
     findings.extend(_downloads_review(config))
     findings.extend(_codex_workspace_review(config))
+    findings.extend(brew_cleanup_findings())
+    findings.extend(docker_findings())
+    findings.extend(pearcleaner_findings())
     return [item for item in findings if item.size_bytes > 0 or item.risk == "review"]
 
 
@@ -33,7 +44,8 @@ def _developer_paths(config: Config) -> list[Finding]:
         ("xcode_derived_data", home / "Library/Developer/Xcode/DerivedData", "rebuildable Xcode artifacts"),
         ("xcode_archives", home / "Library/Developer/Xcode/Archives", "review archives before deleting"),
         ("android_gradle_cache", home / ".gradle/caches", "Gradle cache cleanup should be conservative"),
-        ("homebrew_cache", home / "Library/Caches/Homebrew", "Homebrew cache is rebuildable"),
+        # homebrew_cache removed: brew_cleanup_findings() in scan() provides
+        # richer, item-level findings directly from `brew cleanup --dry-run`
     ]
     findings: list[Finding] = []
     for category, path, reason in candidates:
@@ -61,14 +73,40 @@ def _codex_workspace_review(config: Config) -> list[Finding]:
     codex_docs = Path.home() / "Documents/Codex"
     if not codex_docs.exists():
         return []
-    return [Finding("codex_workspaces", str(codex_docs), path_size(codex_docs), "review", "old agent workspaces can be large; active work must be checked before deletion")]
+
+    dirty = unsafe_repos(codex_docs)
+    if dirty:
+        repo_list = ", ".join(str(r) for r in dirty[:3])
+        suffix = f" and {len(dirty) - 3} more" if len(dirty) > 3 else ""
+        reason = f"active/dirty git repos detected — cannot auto-clean: {repo_list}{suffix}"
+        risk: str = "protected"
+    else:
+        reason = "old agent workspaces can be large; active work must be checked before deletion"
+        risk = "review"
+
+    total = size_of(codex_docs)
+    if total >= _BREAKDOWN_THRESHOLD_BYTES and risk != "protected":
+        summary = top_subdirs_summary(codex_docs)
+        if summary:
+            reason = f"{reason}; {summary}"
+
+    return [Finding("codex_workspaces", str(codex_docs), total, risk, reason)]  # type: ignore[arg-type]
 
 
 def _finding(category: str, path: Path, risk: str, reason: str, config: Config) -> Finding:
     resolved = path.expanduser()
     if _is_protected(resolved, config):
         risk = "protected"
-    return Finding(category, str(resolved), path_size(resolved), risk, reason)  # type: ignore[arg-type]
+
+    total = size_of(resolved)
+
+    # Enrich reason with top-subdirs breakdown for large directories
+    if total >= _BREAKDOWN_THRESHOLD_BYTES and risk != "protected":
+        summary = top_subdirs_summary(resolved)
+        if summary:
+            reason = f"{reason}; {summary}"
+
+    return Finding(category, str(resolved), total, risk, reason)  # type: ignore[arg-type]
 
 
 def _is_protected(path: Path, config: Config) -> bool:
