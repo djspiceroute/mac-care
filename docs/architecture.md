@@ -82,6 +82,13 @@ Loads `~/.config/mac-care/config.toml` with fallback to hardcoded defaults. Retu
 ### `report.py`
 Writes Markdown + JSON reports to `config.reports_dir`. Reports are timestamped and never overwritten. The Markdown groups findings by risk level with size totals.
 
+JSON report findings include a stable `id` derived from category, path, risk, source, and reason. Review approval actions must reference this ID rather than accepting arbitrary paths from user input.
+
+### `review.py`
+Loads a known JSON report and approves one `review` finding by stable ID. The first command path is dry-run; execution delegates to the quarantine move path in `clean.py`.
+
+**Rule:** `protected` findings are rejected, and arbitrary filesystem paths are never accepted from the review command.
+
 ### `scheduler.py` *(planned)*
 Will write/remove a launchd plist at `~/Library/LaunchAgents/com.mac-care.periodic.plist` that runs `mac-care scan` on a configurable interval. Must support `--dry-run` to print the plist without writing it.
 
@@ -203,3 +210,4 @@ These must hold at all times. Tests should catch regressions.
 5. Every `tools/` wrapper returns `[]` on any error — never propagates exceptions to the caller.
 6. `dry_run=True` is the default for `safe_clean()`. Callers must explicitly pass `dry_run=False` to act.
 7. Execution moves to `quarantine_dir`, never `rm`.
+8. Review approval accepts only stable finding IDs from known reports, never arbitrary browser/CLI paths.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .clean import safe_clean
 from .config import Config
@@ -8,6 +9,7 @@ from .doctor import check_tools, recommend_tools
 from .model import format_bytes
 from .notification import notify_scan_complete
 from .report import render_json, render_markdown, write_reports
+from .review import approve_finding
 from .scan import scan
 from .scheduler import install_schedule, uninstall_schedule
 from .summary import summarize_scan
@@ -51,6 +53,14 @@ def main() -> int:
     uninstall_parser = schedule_subparsers.add_parser("uninstall", help="Uninstall periodic scan launchd plist")
     uninstall_parser.add_argument("--dry-run", action="store_true", default=False, help="Print planned removal without changing files")
 
+    review_parser = subparsers.add_parser("review", help="Approve review-risk findings from a report")
+    review_subparsers = review_parser.add_subparsers(dest="review_action", required=True)
+    approve_parser = review_subparsers.add_parser("approve", help="Approve one review-risk finding by ID")
+    approve_parser.add_argument("--report", required=True, help="Path to a mac-care JSON report")
+    approve_parser.add_argument("--finding-id", required=True, help="Stable finding ID from the report")
+    approve_parser.add_argument("--dry-run", action="store_true", default=True, help="Preview the approval action")
+    approve_parser.add_argument("--execute", action="store_true", help="Move the approved finding to quarantine")
+
     args = parser.parse_args()
     config = Config.load(args.config)
 
@@ -75,6 +85,20 @@ def main() -> int:
         if args.schedule_action == "uninstall":
             result = uninstall_schedule(dry_run=args.dry_run)
             print(result.message)
+            return 0
+
+    if args.command == "review":
+        if args.review_action == "approve":
+            print(
+                approve_finding(
+                    Path(args.report),
+                    args.finding_id,
+                    config,
+                    dry_run=not args.execute,
+                )
+            )
+            if not args.execute:
+                print("Dry run only. No files were moved.")
             return 0
 
     findings = scan(config)

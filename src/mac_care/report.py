@@ -6,6 +6,7 @@ import json
 
 from .config import Config
 from .history import write_history_index
+from .ids import finding_id
 from .model import Finding, ToolStatus, format_bytes
 from .summary import RISK_ORDER, summarize_scan
 
@@ -15,7 +16,7 @@ def report_payload(findings: list[Finding], tools: list[ToolStatus]) -> dict:
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "summary": summary.to_dict(),
-        "findings": [finding.__dict__ for finding in findings],
+        "findings": [_finding_payload(finding) for finding in findings],
         "tools": [tool.__dict__ for tool in tools],
     }
 
@@ -192,3 +193,9 @@ def _finding_rows(findings: list[Finding], include_risk: bool = False) -> str:
             "</tr>"
         )
     return "\n".join(rows)
+
+
+def _finding_payload(finding: Finding) -> dict:
+    payload = finding.__dict__.copy()
+    payload["id"] = finding_id(finding)
+    return payload

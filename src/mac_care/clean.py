@@ -53,21 +53,32 @@ def safe_clean(findings: list[Finding], config: Config | None = None, dry_run: b
             )
             continue
 
-        path = Path(finding.path).expanduser()
-        if _is_protected(path, config):
-            actions.append(f"skipped execution for {finding.category}: protected path {path}")
-            continue
-
-        if not path.exists():
-            actions.append(f"skipped execution for {finding.category}: path no longer exists {path}")
-            continue
-
-        destination = _quarantine_path(config, finding, run_id)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(path), str(destination))
-        _write_metadata(destination.parent, destination, finding)
-        actions.append(f"quarantined {finding.category}: {path} -> {destination}")
+        actions.append(quarantine_finding(finding, config, run_id=run_id))
     return actions
+
+
+def quarantine_finding(finding: Finding, config: Config, run_id: str | None = None) -> str:
+    run_id = run_id or datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = Path(finding.path).expanduser()
+    if _is_protected(path, config):
+        return f"skipped execution for {finding.category}: protected path {path}"
+
+    if finding.category in _WORKSPACE_CATEGORIES:
+        dirty = unsafe_repos(path)
+        if dirty:
+            return (
+                f"skipped {finding.category}: unsafe git repos detected at execution time — "
+                f"{', '.join(str(r) for r in dirty[:2])}"
+            )
+
+    if not path.exists():
+        return f"skipped execution for {finding.category}: path no longer exists {path}"
+
+    destination = _quarantine_path(config, finding, run_id)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(path), str(destination))
+    _write_metadata(destination.parent, destination, finding)
+    return f"quarantined {finding.category}: {path} -> {destination}"
 
 
 def _is_protected(path: Path, config: Config) -> bool:

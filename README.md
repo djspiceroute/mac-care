@@ -98,6 +98,15 @@ Prints what would be cleaned from `auto_safe` findings. Does not delete anything
 
 Moves eligible `auto_safe` findings to the configured quarantine directory. This is intentionally narrower than scan output: broad containers such as `~/Library/Caches` and `/tmp` are skipped until scan itemizes their contents.
 
+### `mac-care review approve`
+
+Approves one `review` finding from a JSON report by stable finding ID. Dry-run is the default.
+
+```bash
+mac-care review approve --report ~/Documents/MacCare/reports/mac-care-2026-05-02-220005.json --finding-id abc123
+mac-care review approve --report ~/Documents/MacCare/reports/mac-care-2026-05-02-220005.json --finding-id abc123 --execute
+```
+
 ---
 
 ## Risk levels
@@ -195,7 +204,7 @@ Tests never touch the real filesystem and never call real external tools — all
 | 🔜 | `mac-care scan --stdout --format json` — pipe-friendly output |
 | 🔜 | `mac-care security` — KnockKnock (Objective-See) integration for login items, browser extensions |
 | ✅ | `mac-care clean --safe --execute` — move eligible files to quarantine dir instead of `rm` |
-| 🗓 | Interactive review flow for `review`-class findings |
+| ✅ | Interactive review flow for `review`-class findings |
 | 🗓 | Report history and trending — compare consecutive scans |
 
 See [`docs/technical-spec.md`](docs/technical-spec.md) for full feature status, known constraints, and decision log.

@@ -35,6 +35,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | macOS scan notification | `mac-care scan --notify` | Posts compact scan summary through `osascript`; degrades gracefully |
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Quarantine cleanup execution | `mac-care clean --safe --execute` | Moves eligible `auto_safe` findings to quarantine with metadata; never `rm` |
+| Review approval flow | `mac-care review approve` | Approves one `review` finding by stable report finding ID; quarantine-only on execute |
 | Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
 | Report history index | `mac-care scan` | Writes read-only `index.html` listing previous JSON/Markdown/dashboard reports |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
@@ -51,7 +52,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Feature | Issue | Notes |
 |---|---|---|
 | Move `auto_safe` findings to quarantine | [#12](https://github.com/djspiceroute/mac-care/issues/12) | Implemented for eligible item-level/rebuildable findings; broad containers remain skipped |
-| Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Interactive per-item confirmation for `review` findings |
+| Review approval flow | [#13](https://github.com/djspiceroute/mac-care/issues/13) | Implemented as stable-ID approval from JSON reports; dashboard wiring remains future work |
 | Dashboard action safety model | [#14](https://github.com/djspiceroute/mac-care/issues/14) | Documented in `docs/dashboard-action-safety.md`; implementation remains future work |
 
 #### Epic: Unified local report viewer ([#2](https://github.com/djspiceroute/mac-care/issues/2))
@@ -133,16 +134,18 @@ Key categories protected by default:
 
 ## Test Coverage
 
-100 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
+107 tests, all passing. Runtime: ~0.3s locally, ~14s on `macos-latest` CI.
 
 | Test file | Coverage |
 |---|---|
 | `tests/test_clean.py` | Dry-run default, quarantine moves, metadata, protected-path re-check, non-itemized skip |
 | `tests/test_cli.py` | Scan stdout JSON/Markdown and default report-writing command behavior |
 | `tests/test_history.py` | Report history loading, malformed report skipping, index rendering/writing |
+| `tests/test_ids.py` | Stable finding ID behavior |
 | `tests/test_notification.py` | Notification text and graceful `osascript` delivery behavior |
 | `tests/test_scheduler.py` | launchd plist rendering, dry-run install/uninstall, plist write/remove using temp paths |
 | `tests/test_report.py` | Markdown/JSON/HTML rendering, risk grouping, read-only dashboard guard |
+| `tests/test_review.py` | Review approval dry-run, quarantine execution, protected/unknown finding rejection |
 | `tests/test_summary.py` | Risk totals, top findings, tool warning count |
 | `tests/test_git_safety.py` | `find_git_repos`, `is_dirty`, `has_active_worktrees`, `unsafe_repos` — all degradation paths |
 | `tests/test_doctor.py` | `recommend_tools` — missing/installed/empty/key/brew-prefix |
@@ -174,6 +177,20 @@ Reports include a reusable compact summary used by CLI output and intended for f
     "top_findings": [],
     "tool_warning_count": 2
   }
+}
+```
+
+JSON report findings also include stable IDs used for review approval:
+
+```json
+{
+  "findings": [
+    {
+      "id": "3b6d0f0d9a8c1e2f",
+      "category": "orphaned_app_files",
+      "risk": "review"
+    }
+  ]
 }
 ```
 

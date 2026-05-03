@@ -29,6 +29,7 @@ class ReportTests(unittest.TestCase):
 
         self.assertIn('"summary"', output)
         self.assertIn('"findings"', output)
+        self.assertIn('"id"', output)
 
     def test_render_html_is_read_only_dashboard(self) -> None:
         output = render_html(

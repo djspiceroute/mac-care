@@ -83,3 +83,18 @@ def test_schedule_uninstall_dry_run(monkeypatch, capsys):
     assert cli.main() == 0
 
     assert "Would unload" in capsys.readouterr().out
+
+
+def test_review_approve_dry_run(monkeypatch, capsys):
+    monkeypatch.setattr(cli.Config, "load", lambda _: object())
+    monkeypatch.setattr(cli, "approve_finding", lambda *_args, **_kwargs: "would quarantine review finding abc: /tmp/item")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mac-care", "review", "approve", "--report", "/tmp/report.json", "--finding-id", "abc"],
+    )
+
+    assert cli.main() == 0
+
+    output = capsys.readouterr().out
+    assert "would quarantine review finding abc" in output
+    assert "Dry run only" in output
