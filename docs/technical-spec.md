@@ -36,7 +36,7 @@ Stack: Python 3.11+, stdlib only (no pip runtime deps)
 | Safe cleanup (dry-run) | `mac-care clean --safe --dry-run` | Prints `auto_safe` candidates, no deletion |
 | Quarantine cleanup execution | `mac-care clean --safe --execute` | Moves eligible `auto_safe` findings to quarantine with metadata; never `rm` |
 | Review approval flow | `mac-care review approve` | Approves one `review` finding by stable report finding ID; quarantine-only on execute |
-| Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/Documents/MacCare/reports/` |
+| Markdown + JSON + HTML reports | `mac-care scan` | Timestamped Markdown/JSON plus read-only `latest.html` in `~/.mac-care/reports/` (configurable via `reports_dir`) |
 | Report history index | `mac-care scan` | Writes read-only `index.html` listing previous JSON/Markdown/dashboard reports |
 | Protected paths config | `config.toml` | Hardcoded defaults + user override via TOML |
 | GitHub Actions CI | `.github/workflows/test.yml` | `macos-latest`, Python 3.11, 73 tests |

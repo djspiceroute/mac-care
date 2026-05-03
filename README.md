@@ -47,13 +47,13 @@ No external dependencies required. Optional OSS tools (listed below) extend what
 
 ### `mac-care scan`
 
-Runs all scanners and writes a timestamped Markdown + JSON report to `~/Documents/MacCare/reports/`.
+Runs all scanners and writes a timestamped Markdown + JSON report to `~/.mac-care/reports/`.
 
 ```
 $ mac-care scan
 Scanned 42 findings, 8.3 GB observed.
-Markdown report: ~/Documents/MacCare/reports/mac-care-2026-05-02T21-08-26.md
-JSON report:     ~/Documents/MacCare/reports/mac-care-2026-05-02T21-08-26.json
+Markdown report: ~/.mac-care/reports/mac-care-2026-05-02T21-08-26.md
+JSON report:     ~/.mac-care/reports/mac-care-2026-05-02T21-08-26.json
 ```
 
 The report groups findings by risk level — `auto_safe`, `review`, `protected` — with size totals and per-item reasons.
@@ -103,8 +103,8 @@ Moves eligible `auto_safe` findings to the configured quarantine directory. This
 Approves one `review` finding from a JSON report by stable finding ID. Dry-run is the default.
 
 ```bash
-mac-care review approve --report ~/Documents/MacCare/reports/mac-care-2026-05-02-220005.json --finding-id abc123
-mac-care review approve --report ~/Documents/MacCare/reports/mac-care-2026-05-02-220005.json --finding-id abc123 --execute
+mac-care review approve --report ~/.mac-care/reports/mac-care-2026-05-02-220005.json --finding-id abc123
+mac-care review approve --report ~/.mac-care/reports/mac-care-2026-05-02-220005.json --finding-id abc123 --execute
 ```
 
 ---
@@ -149,8 +149,8 @@ Config file: `~/.config/mac-care/config.toml` — optional, defaults work out of
 
 ```toml
 [policy]
-reports_dir    = "~/Documents/MacCare/reports"
-quarantine_dir = "~/Documents/MacCare/quarantine"
+reports_dir    = "~/.mac-care/reports"
+quarantine_dir = "~/.mac-care/quarantine"
 min_age_days   = 14
 
 protected_paths = [

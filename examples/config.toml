@@ -3,17 +3,20 @@
 # All settings are optional — defaults work out of the box.
 
 [policy]
-# Where timestamped Markdown + JSON reports are written.
-reports_dir = "~/Documents/MacCare/reports"
+# Where timestamped Markdown + JSON + HTML reports are written.
+# Default: ~/.mac-care/reports  (hidden, won't clutter ~/Documents or iCloud Drive)
+# Change to any path you prefer, e.g. "~/Documents/mac-care/reports"
+reports_dir = "~/.mac-care/reports"
 
 # Where files are moved when mac-care clean --execute is run (never rm).
-quarantine_dir = "~/Documents/MacCare/quarantine"
+# Default: ~/.mac-care/quarantine
+quarantine_dir = "~/.mac-care/quarantine"
 
 # Old installers (.dmg / .pkg / .zip) in ~/Downloads older than this are surfaced as review findings.
 min_age_days = 14
 
 # Paths that are never auto-cleaned, regardless of risk level.
-# Replaces the default list entirely when set — include any defaults you want to keep.
+# When set, this replaces the default list entirely — include any defaults you want to keep.
 # Any directory containing an active or dirty git repo is also protected at runtime.
 protected_paths = [
   "~/.codex",
@@ -28,5 +31,5 @@ protected_paths = [
 # Add paths specific to your machine here rather than hardcoding them in code.
 # additional_scan_paths = [
 #   "~/Documents/MyAgents",
-#   "~/multica_workspaces",
+#   "~/Documents/AgentWorkspaces",
 # ]

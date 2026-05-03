@@ -145,7 +145,7 @@ If added, justify it in the PR body. External binaries (`brew`, `dua`, `docker`,
 
 - `dry_run=True` is the default for all clean operations
 - Protected paths are checked before every action, not just at scan time
-- Never `rm -rf` — quarantine dir (`~/Documents/MacCare/quarantine/`) is the deletion target
+- Never `rm -rf` — quarantine dir (`~/.mac-care/quarantine/`) is the deletion target
 - Git safety gate (`git_safety.py`) must run before any action touching workspace directories
 - `auto_safe` is the only risk level eligible for automated cleanup — `review` always requires human approval
 
