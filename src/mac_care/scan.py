@@ -101,6 +101,23 @@ def _under_any_repo(path: Path, repos: set[str]) -> bool:
 
 
 
+def _apply_exclusions(findings: list[Finding], config: Config) -> list[Finding]:
+    """Drop findings whose path starts with any scan_exclude_paths entry."""
+    if not config.scan_exclude_paths:
+        return findings
+    excluded = [p.expanduser().resolve() for p in config.scan_exclude_paths]
+    result = []
+    for f in findings:
+        try:
+            fp = Path(f.path).resolve()
+        except OSError:
+            fp = Path(f.path)
+        if any(fp == ex or ex in fp.parents for ex in excluded):
+            continue
+        result.append(f)
+    return result
+
+
 def scan(config: Config) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(_standard_paths(config))
@@ -123,7 +140,8 @@ def scan(config: Config) -> list[Finding]:
     findings.extend(docker_findings())
     findings.extend(pearcleaner_findings())
     findings.extend(xcode_findings())
-    return [item for item in findings if item.size_bytes > 0 or item.risk == "review"]
+    findings = [item for item in findings if item.size_bytes > 0 or item.risk == "review"]
+    return _apply_exclusions(findings, config)
 
 
 def _standard_paths(config: Config) -> list[Finding]:

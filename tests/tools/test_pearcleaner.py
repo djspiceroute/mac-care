@@ -4,7 +4,12 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from mac_care.tools.pearcleaner import _guess_app_name, pearcleaner_findings
+from mac_care.tools.pearcleaner import (
+    _belongs_to_installed_app,
+    _guess_app_name,
+    _pkgutil_package_ids,
+    pearcleaner_findings,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +54,13 @@ def _mock_run(stdout: str, returncode: int = 0) -> MagicMock:
     return result
 
 
+_NO_INSTALLED = frozenset()
+
+
 def test_pearcleaner_findings_parses_paths() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run(SAMPLE_OUTPUT)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=1024):
         findings = pearcleaner_findings()
 
@@ -65,6 +74,7 @@ def test_pearcleaner_findings_parses_paths() -> None:
 def test_pearcleaner_findings_skips_summary_line() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run(SAMPLE_OUTPUT)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=0):
         findings = pearcleaner_findings()
 
@@ -75,6 +85,7 @@ def test_pearcleaner_findings_skips_summary_line() -> None:
 def test_pearcleaner_findings_all_review_risk() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run(SAMPLE_OUTPUT)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=0):
         findings = pearcleaner_findings()
 
@@ -84,6 +95,7 @@ def test_pearcleaner_findings_all_review_risk() -> None:
 def test_pearcleaner_findings_source_is_pearcleaner() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run(SAMPLE_OUTPUT)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=0):
         findings = pearcleaner_findings()
 
@@ -93,6 +105,7 @@ def test_pearcleaner_findings_source_is_pearcleaner() -> None:
 def test_pearcleaner_findings_reason_contains_app_name() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run(SAMPLE_OUTPUT)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=0):
         findings = pearcleaner_findings()
 
@@ -103,6 +116,7 @@ def test_pearcleaner_findings_reason_contains_app_name() -> None:
 def test_pearcleaner_findings_empty_output() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", return_value=_mock_run("\nFound 0 orphaned files.\n")), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=_NO_INSTALLED), \
          patch("mac_care.tools.pearcleaner.path_size", return_value=0):
         findings = pearcleaner_findings()
 
@@ -128,3 +142,114 @@ def test_pearcleaner_findings_empty_on_oserror() -> None:
     with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
          patch("subprocess.run", side_effect=OSError("launch failed")):
         assert pearcleaner_findings() == []
+
+
+# ---------------------------------------------------------------------------
+# _belongs_to_installed_app — filtering logic
+# ---------------------------------------------------------------------------
+
+_INSTALLED = frozenset([
+    "com.spotify.client",
+    "spotify",
+    "com.anthropic.claudefordesktop",
+    "claude",
+    "com.dashlane.dashlanephonefinal",
+    "dashlane",
+])
+
+
+def test_belongs_direct_bundle_id_match(tmp_path: Path) -> None:
+    p = tmp_path / "com.spotify.client"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_app_name_match(tmp_path: Path) -> None:
+    p = tmp_path / "Claude"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_extension_suffix_match(tmp_path: Path) -> None:
+    # App extension bundle IDs are suffixes of the parent app's bundle ID
+    p = tmp_path / "com.dashlane.dashlanephonefinal.SafariWebExtension"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_helper_suffix_match(tmp_path: Path) -> None:
+    p = tmp_path / "com.spotify.client.helper"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_team_id_prefix_stripped(tmp_path: Path) -> None:
+    # Team ID (10 uppercase alphanum chars) should be stripped before matching
+    p = tmp_path / "ABCDE12345.com.spotify.client"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_team_id_with_group_prefix(tmp_path: Path) -> None:
+    # App groups use pattern TEAMID.group.bundle.id
+    p = tmp_path / "ABCDE12345.group.com.spotify.client"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_plist_file_match(tmp_path: Path) -> None:
+    p = tmp_path / "com.spotify.client.plist"
+    p.touch()
+    assert _belongs_to_installed_app(p, _INSTALLED) is True
+
+
+def test_belongs_unrecognized_returns_false(tmp_path: Path) -> None:
+    p = tmp_path / "com.deleted.OldApp"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, _INSTALLED) is False
+
+
+def test_pkgutil_package_ids_returns_empty_on_failure() -> None:
+    with patch("subprocess.run", side_effect=OSError("not found")):
+        assert _pkgutil_package_ids() == set()
+
+
+def test_pkgutil_package_ids_parses_output() -> None:
+    output = "com.adobe.acrobat.DC\ncom.vmware.horizon\n"
+    with patch("subprocess.run", return_value=_mock_run(output)):
+        ids = _pkgutil_package_ids()
+    assert "com.adobe.acrobat.dc" in ids
+    assert "com.vmware.horizon" in ids
+
+
+def test_belongs_reverse_prefix_pkgutil_match(tmp_path: Path) -> None:
+    # com.adobe.acrobat should match pkgutil receipt com.adobe.acrobat.DC.sca.config
+    installed = frozenset(["com.adobe.acrobat.dc.sca.config", "com.adobe.acrobat.dc.viewer"])
+    p = tmp_path / "com.adobe.acrobat"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, installed) is True
+
+
+def test_belongs_reverse_prefix_requires_dot_separator(tmp_path: Path) -> None:
+    # "com" alone should NOT match "com.adobe.acrobat" (too broad)
+    installed = frozenset(["com.adobe.acrobat"])
+    p = tmp_path / "com"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, installed) is False
+
+
+def test_pearcleaner_findings_filters_installed_app_paths() -> None:
+    output = (
+        "/Users/user/Library/Application Support/com.spotify.client\n"
+        "/Users/user/Library/Application Support/com.deleted.OldApp\n"
+        "Found 2 orphaned files.\n"
+    )
+    installed = frozenset(["com.spotify.client", "spotify"])
+    with patch("mac_care.tools.pearcleaner._pearcleaner_bin", return_value="/usr/local/bin/pearcleaner"), \
+         patch("subprocess.run", return_value=_mock_run(output)), \
+         patch("mac_care.tools.pearcleaner._installed_app_identifiers", return_value=installed), \
+         patch("mac_care.tools.pearcleaner.path_size", return_value=1024):
+        findings = pearcleaner_findings()
+
+    assert len(findings) == 1
+    assert findings[0].path == "/Users/user/Library/Application Support/com.deleted.OldApp"
