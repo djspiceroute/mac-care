@@ -22,6 +22,7 @@ class Config:
     min_age_days: int = 14
     protected_paths: list[Path] = field(default_factory=list)
     additional_scan_paths: list[Path] = field(default_factory=list)
+    scan_exclude_paths: list[Path] = field(default_factory=list)
     # Per-category overrides: {category: {min_age_days: int, ...}}
     category_policy: dict[str, dict] = field(default_factory=dict)
     retention_days: int = 30
@@ -43,6 +44,7 @@ class Config:
         policy = data.get("policy", {})
         protected = policy.get("protected_paths", DEFAULT_PROTECTED_PATHS)
         additional = policy.get("additional_scan_paths", [])
+        exclude = policy.get("scan_exclude_paths", [])
 
         # Collect [policy.<category>] subsections as per-category overrides
         category_policy: dict[str, dict] = {}
@@ -61,6 +63,7 @@ class Config:
             min_age_days=int(policy.get("min_age_days", 14)),
             protected_paths=[Path(os.path.expanduser(item)) for item in protected],
             additional_scan_paths=[Path(os.path.expanduser(item)) for item in additional],
+            scan_exclude_paths=[Path(os.path.expanduser(item)) for item in exclude],
             category_policy=category_policy,
             retention_days=int(policy.get("retention_days", 30)),
             retention_min_keep=int(policy.get("retention_min_keep", 10)),
