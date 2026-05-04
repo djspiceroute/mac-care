@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from mac_care.tools.pearcleaner import (
     _belongs_to_installed_app,
     _guess_app_name,
+    _pkgutil_package_ids,
     pearcleaner_findings,
 )
 
@@ -206,6 +207,35 @@ def test_belongs_unrecognized_returns_false(tmp_path: Path) -> None:
     p = tmp_path / "com.deleted.OldApp"
     p.mkdir()
     assert _belongs_to_installed_app(p, _INSTALLED) is False
+
+
+def test_pkgutil_package_ids_returns_empty_on_failure() -> None:
+    with patch("subprocess.run", side_effect=OSError("not found")):
+        assert _pkgutil_package_ids() == set()
+
+
+def test_pkgutil_package_ids_parses_output() -> None:
+    output = "com.adobe.acrobat.DC\ncom.vmware.horizon\n"
+    with patch("subprocess.run", return_value=_mock_run(output)):
+        ids = _pkgutil_package_ids()
+    assert "com.adobe.acrobat.dc" in ids
+    assert "com.vmware.horizon" in ids
+
+
+def test_belongs_reverse_prefix_pkgutil_match(tmp_path: Path) -> None:
+    # com.adobe.acrobat should match pkgutil receipt com.adobe.acrobat.DC.sca.config
+    installed = frozenset(["com.adobe.acrobat.dc.sca.config", "com.adobe.acrobat.dc.viewer"])
+    p = tmp_path / "com.adobe.acrobat"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, installed) is True
+
+
+def test_belongs_reverse_prefix_requires_dot_separator(tmp_path: Path) -> None:
+    # "com" alone should NOT match "com.adobe.acrobat" (too broad)
+    installed = frozenset(["com.adobe.acrobat"])
+    p = tmp_path / "com"
+    p.mkdir()
+    assert _belongs_to_installed_app(p, installed) is False
 
 
 def test_pearcleaner_findings_filters_installed_app_paths() -> None:

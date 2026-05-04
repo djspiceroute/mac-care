@@ -51,15 +51,34 @@ def _pearcleaner_bin() -> str | None:
     return None
 
 
+def _pkgutil_package_ids() -> set[str]:
+    """Return lowercased package receipt IDs from ``pkgutil --pkgs``.
+
+    Catches apps installed via .pkg installers (Adobe, VMware, enterprise tools)
+    that don't leave a .app bundle in /Applications/.
+    Returns an empty set if pkgutil is unavailable or fails.
+    """
+    try:
+        result = subprocess.run(
+            ["pkgutil", "--pkgs"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return set()
+    return {line.strip().lower() for line in result.stdout.splitlines() if line.strip()}
+
+
 def _installed_app_identifiers() -> frozenset[str]:
     """Return a frozenset of lowercased strings that identify currently installed apps.
 
-    Each app contributes:
-    - Its CFBundleIdentifier (e.g. ``com.spotify.client``)
-    - Its CFBundleName / CFBundleDisplayName (e.g. ``Spotify``)
-    - The .app bundle stem (e.g. ``Spotify``)
+    Sources:
+    - .app bundles in /Applications/, /Applications/Setapp/, /System/Applications/,
+      ~/Applications/ (depth 1 and 2): CFBundleIdentifier, CFBundleName,
+      CFBundleDisplayName, and the bundle stem
+    - pkgutil receipt IDs: catches pkg-installed apps (Adobe, VMware, etc.)
     """
     identifiers: set[str] = set()
+
     for app_dir in _APP_DIRS:
         if not app_dir.exists():
             continue
@@ -83,22 +102,26 @@ def _installed_app_identifiers() -> frozenset[str]:
                 val = info.get(key, "")
                 if val:
                     identifiers.add(val.lower())
+
+    identifiers.update(_pkgutil_package_ids())
     return frozenset(identifiers)
 
 
 def _belongs_to_installed_app(path: Path, installed: frozenset[str]) -> bool:
     """Return True if *path* looks like it belongs to a currently installed app.
 
-    Handles four cases that Pearcleaner's CLI misses:
-    1. Exact bundle-ID match: ``com.spotify.client``
-    2. Extension / helper suffix: ``com.spotify.client.helper`` (parent is installed)
+    Handles five cases that Pearcleaner's CLI misses:
+    1. Exact bundle-ID or app-name match: ``com.spotify.client``, ``Spotify``
+    2. Extension/helper suffix: ``com.spotify.client.helper`` (parent is installed)
     3. Team-ID prefix strip: ``2BBY89MBSN.dev.warp`` → ``dev.warp``
-    4. Plain app name: ``Claude``, ``Spotify``
+    4. Team-ID + group prefix: ``TEAMID.group.com.app`` → ``com.app``
+    5. Reverse prefix (pkgutil): path name is a shared prefix of an installed pkg ID
+       e.g. ``com.adobe.acrobat`` matches receipt ``com.adobe.acrobat.DC.sca.config``
     """
     name = path.stem if path.is_file() else path.name
     name_lower = name.lower()
 
-    # Cases 1 and 4: direct match against bundle IDs or app names
+    # Cases 1: direct match against bundle IDs or app names
     if name_lower in installed:
         return True
 
@@ -108,7 +131,15 @@ def _belongs_to_installed_app(path: Path, installed: frozenset[str]) -> bool:
         if name_lower.startswith(ident + "."):
             return True
 
-    # Case 3: strip 10-char team-ID prefix then re-check cases 1 and 2
+    # Case 5: reverse prefix — name is a meaningful prefix of a pkgutil receipt ID
+    # e.g. com.adobe.acrobat → com.adobe.acrobat.DC.sca.config (installed)
+    # Require at least two dot-separated components to avoid spurious matches.
+    if "." in name_lower:
+        for ident in installed:
+            if ident.startswith(name_lower + "."):
+                return True
+
+    # Cases 3 & 4: strip 10-char team-ID prefix then re-check cases 1, 2, 5
     stripped = _TEAM_ID_RE.sub("", name)
     if stripped != name:
         s = stripped.lower()
@@ -118,7 +149,7 @@ def _belongs_to_installed_app(path: Path, installed: frozenset[str]) -> bool:
         if s in installed:
             return True
         for ident in installed:
-            if s.startswith(ident + ".") or s == ident:
+            if s.startswith(ident + ".") or ident.startswith(s + "."):
                 return True
 
     return False
