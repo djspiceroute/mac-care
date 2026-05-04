@@ -64,7 +64,15 @@ def bulk_quarantine(
 
         destination = _quarantine_path(config, finding, run_id)
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        shutil.move(str(path), str(destination))
+        try:
+            shutil.move(str(path), str(destination))
+        except (PermissionError, OSError, shutil.Error) as e:
+            results.append(ActionResult(
+                action="quarantine", category=finding.category, path=str(path),
+                status="skipped", message=f"skipped: permission denied — {e}",
+                size_bytes=finding.size_bytes,
+            ))
+            continue
         _write_metadata(destination.parent, destination, finding)
         results.append(ActionResult(
             action="quarantine", category=finding.category, path=str(path),
@@ -147,8 +155,11 @@ def bulk_purge(
 
 def render_bulk_summary(results: list[ActionResult], action: str) -> str:
     done = [r for r in results if r.status in {"quarantined", "purged"}]
-    skipped = [r for r in results if r.status == "skipped"]
     would = [r for r in results if r.status.startswith("would_")]
+    missing = [r for r in results if r.status == "skipped" and "no longer exists" in r.message]
+    denied = [r for r in results if r.status == "skipped" and "permission denied" in r.message]
+    other_skipped = [r for r in results if r.status == "skipped"
+                     and "no longer exists" not in r.message and "permission denied" not in r.message]
     total_bytes = sum(r.size_bytes for r in done or would)
 
     if would:
@@ -157,10 +168,18 @@ def render_bulk_summary(results: list[ActionResult], action: str) -> str:
             lines.append(f"  {r.path}")
         if len(would) > 10:
             lines.append(f"  … and {len(would) - 10} more")
-    else:
-        lines = [f"{action.capitalize()}d {len(done)} item(s) ({format_bytes(total_bytes)})."]
-        if skipped:
-            lines.append(f"Skipped {len(skipped)} item(s).")
+        return "\n".join(lines)
+
+    lines = [f"{action.capitalize()}d {len(done)} item(s) ({format_bytes(total_bytes)})."]
+    if missing:
+        lines.append(f"Already gone: {len(missing)} item(s) no longer existed on disk.")
+    if denied:
+        lines.append(
+            f"Permission denied: {len(denied)} item(s) in /Library/ require sudo. "
+            f"Re-run with: sudo mac-care review bulk --category ... --execute"
+        )
+    if other_skipped:
+        lines.append(f"Skipped: {len(other_skipped)} item(s) (protected or safety check failed).")
     return "\n".join(lines)
 
 
