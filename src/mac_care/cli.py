@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 import sys
 
+from .action_log import load_action_history, render_history_text
 from .actions import preview_restore_action, restore_action
+from .bulk_review import bulk_purge, bulk_quarantine, render_bulk_summary
 from .clean import safe_clean
 from .compare import compare_reports, load_report_from_json, render_compare_json, render_compare_markdown, render_what_changed_cli, what_changed
 from .config import Config
@@ -19,7 +21,7 @@ from .doctor import check_tools, recommend_tools
 from .model import Report, format_bytes
 from .notification import notify_scan_complete
 from .report import render_json, render_markdown, write_reports
-from .review import approve_finding
+from .review import approve_finding, _finding_from_payload
 from .scan import scan
 from .scheduler import get_schedule_status, install_schedule, uninstall_schedule
 from .summary import summarize_scan
@@ -96,6 +98,9 @@ def main() -> int:
         help="Output format (default: markdown)",
     )
 
+    history_parser = subparsers.add_parser("history", help="Show history of bulk cleanup actions")
+    history_parser.add_argument("--limit", type=int, default=20, help="Number of entries to show (default: 20)")
+
     explain_parser = subparsers.add_parser("explain", help="Explain the rationale behind a finding or category")
     explain_parser.add_argument("identifier", help="Finding ID or category name")
     explain_parser.add_argument("--report", help="Path to a mac-care JSON report (defaults to latest)")
@@ -107,6 +112,13 @@ def main() -> int:
     approve_parser.add_argument("--finding-id", required=True, help="Stable finding ID from the report")
     approve_parser.add_argument("--dry-run", action="store_true", default=True, help="Preview the approval action")
     approve_parser.add_argument("--execute", action="store_true", help="Move the approved finding to quarantine")
+
+    bulk_parser = review_subparsers.add_parser("bulk", help="Bulk quarantine or purge all findings in a category")
+    bulk_parser.add_argument("--category", required=True, help="Finding category to action (e.g. orphaned_app_files)")
+    bulk_parser.add_argument("--report", help="Path to a mac-care JSON report (defaults to latest)")
+    bulk_parser.add_argument("--dry-run", action="store_true", default=True, help="Preview without making changes (default)")
+    bulk_parser.add_argument("--execute", action="store_true", help="Quarantine all matching findings (reversible)")
+    bulk_parser.add_argument("--purge", action="store_true", help="Permanently delete all matching findings (no undo)")
 
     args = parser.parse_args()
     config = Config.load(args.config)
@@ -240,6 +252,11 @@ def main() -> int:
             print(explain_category(args.identifier))
         return 0
 
+    if args.command == "history":
+        entries = load_action_history(config)
+        print(render_history_text(entries, limit=args.limit))
+        return 0
+
     if args.command == "review":
         if args.review_action == "approve":
             print(
@@ -252,6 +269,53 @@ def main() -> int:
             )
             if not args.execute:
                 print("Dry run only. No files were moved.")
+            return 0
+
+        if args.review_action == "bulk":
+            report_path = Path(args.report) if args.report else None
+            if report_path is None:
+                history = load_history(config.reports_dir)
+                if history:
+                    report_path = history[0].json_path
+            if not report_path or not report_path.exists():
+                print("Error: No report found. Run 'mac-care scan' first.", file=sys.stderr)
+                return 1
+
+            findings = _load_findings_by_category(report_path, args.category)
+            if not findings:
+                print(f"No findings found for category '{args.category}' in {report_path}")
+                return 0
+
+            total = sum(f.size_bytes for f in findings)
+            print(f"Found {len(findings)} finding(s) in '{args.category}' ({format_bytes(total)}).")
+
+            if args.purge and not args.execute:
+                print(f"Dry run — would permanently delete {len(findings)} item(s). Use --execute --purge to proceed.")
+                results = bulk_purge(findings, config, dry_run=True)
+                print(render_bulk_summary(results, "purge"))
+                return 0
+
+            if args.purge and args.execute:
+                confirm = input(
+                    f"About to permanently delete {len(findings)} item(s) ({format_bytes(total)}). "
+                    f"This cannot be undone.\nContinue? [y/N] "
+                ).strip().lower()
+                if confirm != "y":
+                    print("Aborted.")
+                    return 0
+                results = bulk_purge(findings, config, dry_run=False)
+                print(render_bulk_summary(results, "purge"))
+                return 0
+
+            if args.execute:
+                results = bulk_quarantine(findings, config, dry_run=False)
+                print(render_bulk_summary(results, "quarantine"))
+                return 0
+
+            # default: dry run quarantine
+            results = bulk_quarantine(findings, config, dry_run=True)
+            print(render_bulk_summary(results, "quarantine"))
+            print("\nDry run only. Use --execute to quarantine, or --execute --purge to permanently delete.")
             return 0
 
     findings = scan(config)
@@ -348,6 +412,22 @@ def main() -> int:
 
     parser.error("unknown command")
     return 2
+
+
+def _load_findings_by_category(report_path: Path, category: str):
+    """Load all findings of a given category from a JSON report."""
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    findings = []
+    for item in payload.get("findings", []):
+        if not isinstance(item, dict) or item.get("category") != category:
+            continue
+        f = _finding_from_payload(item)
+        if f:
+            findings.append(f)
+    return findings
 
 
 def _tools_recommend() -> int:
